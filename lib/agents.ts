@@ -8,6 +8,9 @@ export async function getAgents(): Promise<Agent[]> {
   const registry = remoteCliAgents && remoteCliAgents.length > 0
     ? buildRegistryFromCliAgents(remoteCliAgents)
     : loadRegistry()
+  // Remote SSH mode currently discovers agents from the remote CLI only.
+  // We intentionally skip SOUL.md loading here because remote filesystem reads
+  // are not implemented yet, so all file-backed enrichment remains local-only.
   const workspacePath = remoteCliAgents && remoteCliAgents.length > 0
     ? ''
     : (process.env.WORKSPACE_PATH || '')

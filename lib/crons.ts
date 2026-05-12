@@ -2,7 +2,7 @@ import { CronJob, CronDelivery } from '@/lib/types'
 import { execSync } from 'child_process'
 import { parseSchedule, describeCron } from './cron-utils'
 import { loadRegistry } from '@/lib/agents-registry'
-import { extractJson } from '@/lib/cli-utils'
+import { extractJobsArray, extractJson } from '@/lib/cli-utils'
 import { isRemoteOpenClawActive, listRemoteCliAgents, listRemoteCronJobs } from './openclaw-connection-server'
 
 /**
@@ -56,16 +56,15 @@ export async function getCrons(): Promise<CronJob[]> {
         return []
       }
 
-      const parsed = extractJson(raw) as Record<string, unknown>
-      jobs = Array.isArray(parsed)
-        ? parsed
-        : (parsed.jobs ?? parsed.data ?? []) as unknown[]
+      const parsed = extractJson(raw)
+      jobs = extractJobsArray(parsed)
     }
 
     // Load known agent IDs for dynamic cron-to-agent matching
     const remoteCliAgents = isRemoteOpenClawActive() ? await listRemoteCliAgents() : null
-    const agentIds = remoteCliAgents && remoteCliAgents.length > 0
-      ? remoteCliAgents.map(agent => agent.id).filter(Boolean)
+    const remoteAgentIds = remoteCliAgents?.map(agent => agent.id).filter(Boolean) ?? []
+    const agentIds = remoteAgentIds.length > 0
+      ? remoteAgentIds
       : loadRegistry().map(a => a.id)
 
     const result = jobs.map((job: unknown) => {

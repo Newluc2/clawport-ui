@@ -1,6 +1,6 @@
 import { createServer, type Server } from 'net'
 import { Client, type ClientChannel } from 'ssh2'
-import { extractJson } from './cli-utils'
+import { extractJobsArray, extractJson } from './cli-utils'
 import type { CliAgentEntry } from './agents-registry'
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error'
@@ -417,7 +417,7 @@ async function getRemoteOpenClawBin(): Promise<string> {
   if (tunnel.remoteOpenClawBin) return tunnel.remoteOpenClawBin
 
   try {
-    const detected = await execOnActiveTunnel('command -v openclaw', 5000)
+    const detected = await execOnActiveTunnel('type -P openclaw || command -v openclaw', 5000)
     tunnel.remoteOpenClawBin = assertSafeRemoteShellToken(detected, 'binary path')
   } catch {
     throw new Error('Unable to find the openclaw binary on the remote host')
@@ -431,7 +431,7 @@ export async function runRemoteOpenClawCommand(args: string[], timeoutMs = 15000
   const command = [
     assertSafeRemoteShellToken(bin, 'binary path'),
     ...args.map((arg, index) => assertSafeRemoteShellToken(arg, `argument ${index + 1}`)),
-  ].join(' ')
+  ].map((arg) => `"${arg}"`).join(' ')
   return execOnActiveTunnel(command, timeoutMs)
 }
 
@@ -452,16 +452,7 @@ export async function listRemoteCronJobs(): Promise<unknown[] | null> {
 
   try {
     const raw = await runRemoteOpenClawCommand(['cron', 'list', '--json'])
-    const parsed = extractJson(raw) as Record<string, unknown> | unknown[]
-    let jobs: unknown[] = []
-    if (Array.isArray(parsed)) {
-      jobs = parsed
-    } else if (Array.isArray((parsed as Record<string, unknown>).jobs)) {
-      jobs = (parsed as Record<string, unknown>).jobs as unknown[]
-    } else if (Array.isArray((parsed as Record<string, unknown>).data)) {
-      jobs = (parsed as Record<string, unknown>).data as unknown[]
-    }
-    return jobs
+    return extractJobsArray(extractJson(raw))
   } catch {
     return null
   }

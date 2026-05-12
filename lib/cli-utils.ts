@@ -36,3 +36,13 @@ export function extractJson(raw: string): unknown {
 
   throw new SyntaxError('No JSON found in CLI output')
 }
+
+export function extractJobsArray(parsed: unknown): unknown[] {
+  if (Array.isArray(parsed)) return parsed
+  if (parsed && typeof parsed === 'object') {
+    const record = parsed as Record<string, unknown>
+    if (Array.isArray(record.jobs)) return record.jobs
+    if (Array.isArray(record.data)) return record.data
+  }
+  return []
+}
