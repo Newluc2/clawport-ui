@@ -86,7 +86,10 @@ function loadProfiles(): PersistedProfile[] {
       name: legacyParsed.gatewayHost || 'OpenClaw',
       ...legacyParsed,
     }
-    return [normalizeProfile(migrated)]
+    const normalized = normalizeProfile(migrated)
+    localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify([normalized]))
+    localStorage.removeItem(LEGACY_STORAGE_KEY)
+    return [normalized]
   } catch {
     return []
   }
@@ -448,7 +451,7 @@ export function OpenClawConnectionModal({
           </div>
 
           <label style={{ display: 'grid', gap: 6 }}>
-            <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>OpenClaw Gateway Token (optional, not persisted)</span>
+            <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>OpenClaw Gateway Token (optional, saved in this browser profile)</span>
             <input
               className="apple-input"
               type="password"

@@ -83,13 +83,17 @@ function toErrorMessage(err: unknown): string {
   return 'Unknown connection error'
 }
 
-const SAFE_REMOTE_SHELL_TOKEN = /^[A-Za-z0-9_./:=+-]+$/
+const SAFE_REMOTE_SHELL_TOKEN = /^[A-Za-z0-9_./:+-]+$/
 
 function assertSafeRemoteShellToken(value: string, label: string): string {
   if (!SAFE_REMOTE_SHELL_TOKEN.test(value)) {
     throw new Error(`Unsafe remote shell ${label}`)
   }
   return value
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`
 }
 
 function setState(partial: Partial<RuntimeState>) {
@@ -431,7 +435,7 @@ export async function runRemoteOpenClawCommand(args: string[], timeoutMs = 15000
   const command = [
     assertSafeRemoteShellToken(bin, 'binary path'),
     ...args.map((arg, index) => assertSafeRemoteShellToken(arg, `argument ${index + 1}`)),
-  ].map((arg) => `"${arg}"`).join(' ')
+  ].map(shellQuote).join(' ')
   return execOnActiveTunnel(command, timeoutMs)
 }
 
