@@ -12,48 +12,104 @@ import {
 import { useOpenClawConnection } from '@/lib/useOpenClawConnection'
 import type { OpenClawConnectionProfile, OpenClawConnectionSecrets, SshAuthMethod } from '@/lib/openclaw-connection'
 
-const STORAGE_KEY = 'clawport-openclaw-connection-profile'
+const LEGACY_STORAGE_KEY = 'clawport-openclaw-connection-profile'
+const PROFILES_STORAGE_KEY = 'clawport-openclaw-connection-profiles'
+const ACTIVE_PROFILE_STORAGE_KEY = 'clawport-openclaw-connection-active-profile-id'
 
 interface PersistedProfile {
+  id: string
+  name: string
   gatewayHost: string
   gatewayPort: number
   sshHost: string
   sshPort: number
   sshUser: string
   sshAuthMethod: SshAuthMethod
+  gatewayToken?: string
 }
 
-const DEFAULT_PROFILE: PersistedProfile = {
+const DEFAULT_PROFILE = {
   gatewayHost: '',
   gatewayPort: 18789,
   sshHost: '',
   sshPort: 22,
   sshUser: '',
   sshAuthMethod: 'password',
+} as const
+
+function generateProfileId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `profile-${Date.now()}`
 }
 
-function loadProfile(): PersistedProfile {
-  if (typeof window === 'undefined') return { ...DEFAULT_PROFILE }
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return { ...DEFAULT_PROFILE }
-    const parsed = JSON.parse(raw) as Partial<PersistedProfile>
-    return {
-      gatewayHost: typeof parsed.gatewayHost === 'string' ? parsed.gatewayHost : '',
-      gatewayPort: typeof parsed.gatewayPort === 'number' ? parsed.gatewayPort : 18789,
-      sshHost: typeof parsed.sshHost === 'string' ? parsed.sshHost : '',
-      sshPort: typeof parsed.sshPort === 'number' ? parsed.sshPort : 22,
-      sshUser: typeof parsed.sshUser === 'string' ? parsed.sshUser : '',
-      sshAuthMethod: parsed.sshAuthMethod === 'privateKey' ? 'privateKey' : 'password',
-    }
-  } catch {
-    return { ...DEFAULT_PROFILE }
+function normalizeProfile(parsed: Partial<PersistedProfile>): PersistedProfile {
+  return {
+    id: typeof parsed.id === 'string' ? parsed.id : generateProfileId(),
+    name: typeof parsed.name === 'string' ? parsed.name : 'OpenClaw',
+    gatewayHost: typeof parsed.gatewayHost === 'string' ? parsed.gatewayHost : DEFAULT_PROFILE.gatewayHost,
+    gatewayPort: typeof parsed.gatewayPort === 'number' ? parsed.gatewayPort : DEFAULT_PROFILE.gatewayPort,
+    sshHost: typeof parsed.sshHost === 'string' ? parsed.sshHost : DEFAULT_PROFILE.sshHost,
+    sshPort: typeof parsed.sshPort === 'number' ? parsed.sshPort : DEFAULT_PROFILE.sshPort,
+    sshUser: typeof parsed.sshUser === 'string' ? parsed.sshUser : DEFAULT_PROFILE.sshUser,
+    sshAuthMethod: parsed.sshAuthMethod === 'privateKey' ? 'privateKey' : 'password',
+    gatewayToken: typeof parsed.gatewayToken === 'string' ? parsed.gatewayToken : undefined,
   }
 }
 
-function saveProfile(profile: PersistedProfile) {
+function createDraftProfile(): PersistedProfile {
+  return {
+    id: generateProfileId(),
+    name: 'New OpenClaw',
+    ...DEFAULT_PROFILE,
+  }
+}
+
+function loadProfiles(): PersistedProfile[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const rawProfiles = localStorage.getItem(PROFILES_STORAGE_KEY)
+    if (rawProfiles) {
+      const parsed = JSON.parse(rawProfiles) as unknown
+      if (Array.isArray(parsed)) {
+        return parsed.map((p) => normalizeProfile((p || {}) as Partial<PersistedProfile>))
+      }
+    }
+
+    // Backward compatibility: migrate old single profile format.
+    const legacyRaw = localStorage.getItem(LEGACY_STORAGE_KEY)
+    if (!legacyRaw) return []
+    const legacyParsed = JSON.parse(legacyRaw) as Partial<PersistedProfile>
+    const migrated = {
+      id: generateProfileId(),
+      name: legacyParsed.gatewayHost || 'OpenClaw',
+      ...legacyParsed,
+    }
+    return [normalizeProfile(migrated)]
+  } catch {
+    return []
+  }
+}
+
+function saveProfiles(profiles: PersistedProfile[]) {
   if (typeof window === 'undefined') return
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(profile))
+  localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(profiles))
+}
+
+function loadActiveProfileId(): string | null {
+  if (typeof window === 'undefined') return null
+  return localStorage.getItem(ACTIVE_PROFILE_STORAGE_KEY)
+}
+
+function saveActiveProfileId(profileId: string) {
+  if (typeof window === 'undefined') return
+  localStorage.setItem(ACTIVE_PROFILE_STORAGE_KEY, profileId)
+}
+
+function clearActiveProfileId() {
+  if (typeof window === 'undefined') return
+  localStorage.removeItem(ACTIVE_PROFILE_STORAGE_KEY)
 }
 
 export function OpenClawConnectionModal({
@@ -65,17 +121,33 @@ export function OpenClawConnectionModal({
 }) {
   const { status, loading, error, connect, reconnect, disconnect } = useOpenClawConnection()
 
-  const [profile, setProfile] = useState<PersistedProfile>(() => loadProfile())
+  const [profiles, setProfiles] = useState<PersistedProfile[]>(() => loadProfiles())
+  const [selectedProfileId, setSelectedProfileId] = useState<string>(() => loadActiveProfileId() || '')
+  const [profile, setProfile] = useState<PersistedProfile>(() => {
+    const loaded = loadProfiles()
+    const selected = loaded.find((p) => p.id === loadActiveProfileId()) || loaded[0]
+    return selected ?? createDraftProfile()
+  })
   const [sshPassword, setSshPassword] = useState('')
   const [sshPrivateKey, setSshPrivateKey] = useState('')
   const [sshPassphrase, setSshPassphrase] = useState('')
-  const [gatewayToken, setGatewayToken] = useState('')
+  const [gatewayToken, setGatewayToken] = useState(profile.gatewayToken || '')
   const [formError, setFormError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open) return
-    const fromStorage = loadProfile()
-    setProfile(fromStorage)
+    const loaded = loadProfiles()
+    setProfiles(loaded)
+
+    const savedActiveId = loadActiveProfileId()
+    const selected = loaded.find((p) => p.id === savedActiveId) || loaded[0] || createDraftProfile()
+
+    setSelectedProfileId(loaded.find((p) => p.id === selected.id) ? selected.id : '')
+    setProfile(selected)
+    setGatewayToken(selected.gatewayToken || '')
+    setSshPassword('')
+    setSshPrivateKey('')
+    setSshPassphrase('')
   }, [open])
 
   const statusLabel = useMemo(() => {
@@ -90,6 +162,64 @@ export function OpenClawConnectionModal({
     profile.sshHost.trim().length > 0 &&
     profile.sshUser.trim().length > 0 &&
     (profile.sshAuthMethod === 'password' ? sshPassword.trim().length > 0 : sshPrivateKey.trim().length > 0)
+
+  function persistCurrentProfile(): PersistedProfile {
+    const normalized: PersistedProfile = {
+      ...profile,
+      name: profile.name.trim() || profile.gatewayHost.trim() || 'OpenClaw',
+      gatewayToken: gatewayToken.trim() || undefined,
+    }
+
+    const nextProfiles = profiles.some((p) => p.id === normalized.id)
+      ? profiles.map((p) => (p.id === normalized.id ? normalized : p))
+      : [...profiles, normalized]
+
+    setProfiles(nextProfiles)
+    setProfile(normalized)
+    setSelectedProfileId(normalized.id)
+    saveProfiles(nextProfiles)
+    saveActiveProfileId(normalized.id)
+    return normalized
+  }
+
+  function selectProfile(profileId: string) {
+    const selected = profiles.find((p) => p.id === profileId)
+    if (!selected) return
+    setSelectedProfileId(selected.id)
+    setProfile(selected)
+    setGatewayToken(selected.gatewayToken || '')
+    setSshPassword('')
+    setSshPrivateKey('')
+    setSshPassphrase('')
+    saveActiveProfileId(selected.id)
+  }
+
+  function createNewProfile() {
+    setSelectedProfileId('')
+    setProfile(createDraftProfile())
+    setGatewayToken('')
+    setSshPassword('')
+    setSshPrivateKey('')
+    setSshPassphrase('')
+    clearActiveProfileId()
+  }
+
+  function deleteSelectedProfile() {
+    if (!selectedProfileId) return
+    const nextProfiles = profiles.filter((p) => p.id !== selectedProfileId)
+    setProfiles(nextProfiles)
+    saveProfiles(nextProfiles)
+
+    const next = nextProfiles[0]
+    if (next) {
+      setSelectedProfileId(next.id)
+      setProfile(next)
+      setGatewayToken(next.gatewayToken || '')
+      saveActiveProfileId(next.id)
+    } else {
+      createNewProfile()
+    }
+  }
 
   async function onConnect() {
     setFormError(null)
@@ -117,11 +247,10 @@ export function OpenClawConnectionModal({
 
     try {
       await connect(payloadProfile, secrets)
-      saveProfile(profile)
+      persistCurrentProfile()
       setSshPassword('')
       setSshPrivateKey('')
       setSshPassphrase('')
-      setGatewayToken('')
       onOpenChange(false)
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Unable to establish connection')
@@ -152,6 +281,94 @@ export function OpenClawConnectionModal({
           <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
             Status: <strong style={{ color: 'var(--text-primary)' }}>{statusLabel}</strong>
             {status.localPort ? ` (localhost:${status.localPort})` : ''}
+            {!status.usesTunnel && status.status !== 'connecting' ? ' (Local OpenClaw)' : ''}
+          </div>
+
+          <div className="grid gap-3" style={{ gridTemplateColumns: '1fr auto auto' }}>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Saved OpenClaw Profiles</span>
+              <select
+                className="apple-input"
+                value={selectedProfileId}
+                onChange={(e) => {
+                  const value = e.target.value
+                  if (!value) {
+                    createNewProfile()
+                    return
+                  }
+                  selectProfile(value)
+                }}
+              >
+                <option value="">New profile…</option>
+                {profiles.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={createNewProfile}
+              className="btn-scale"
+              style={{
+                alignSelf: 'end',
+                padding: '8px 12px',
+                borderRadius: 8,
+                border: '1px solid var(--separator)',
+                background: 'var(--fill-tertiary)',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+              }}
+            >
+              New
+            </button>
+            <button
+              type="button"
+              onClick={deleteSelectedProfile}
+              disabled={!selectedProfileId}
+              className="btn-scale"
+              style={{
+                alignSelf: 'end',
+                padding: '8px 12px',
+                borderRadius: 8,
+                border: '1px solid var(--separator)',
+                background: 'var(--fill-tertiary)',
+                color: 'var(--text-primary)',
+                cursor: !selectedProfileId ? 'not-allowed' : 'pointer',
+                opacity: !selectedProfileId ? 0.6 : 1,
+              }}
+            >
+              Delete
+            </button>
+          </div>
+
+          <div className="grid gap-3" style={{ gridTemplateColumns: '1fr auto' }}>
+            <label style={{ display: 'grid', gap: 6 }}>
+              <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Profile Name</span>
+              <input
+                className="apple-input"
+                value={profile.name}
+                onChange={(e) => setProfile({ ...profile, name: e.target.value })}
+                placeholder="My Remote OpenClaw"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={persistCurrentProfile}
+              className="btn-scale"
+              style={{
+                alignSelf: 'end',
+                padding: '8px 12px',
+                borderRadius: 8,
+                border: '1px solid var(--separator)',
+                background: 'var(--fill-tertiary)',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+              }}
+            >
+              Save Profile
+            </button>
           </div>
 
           <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 160px' }}>
@@ -287,6 +504,25 @@ export function OpenClawConnectionModal({
           <div style={{ display: 'flex', gap: 8 }}>
             <button
               type="button"
+              onClick={() => {
+                disconnect().then(() => onOpenChange(false)).catch(() => {})
+              }}
+              disabled={loading || status.status === 'disconnected'}
+              className="btn-scale"
+              style={{
+                padding: '8px 12px',
+                borderRadius: 8,
+                border: '1px solid var(--separator)',
+                background: 'var(--fill-tertiary)',
+                color: 'var(--text-primary)',
+                cursor: loading || status.status === 'disconnected' ? 'not-allowed' : 'pointer',
+                opacity: loading || status.status === 'disconnected' ? 0.6 : 1,
+              }}
+            >
+              Use Local OpenClaw
+            </button>
+            <button
+              type="button"
               onClick={() => reconnect().catch(() => {})}
               disabled={loading || !status.hasReconnectCredentials}
               className="btn-scale"
@@ -334,8 +570,8 @@ export function OpenClawConnectionModal({
               cursor: loading ? 'not-allowed' : 'pointer',
               opacity: loading ? 0.7 : 1,
             }}
-          >
-            {loading ? 'Connecting...' : 'Connect'}
+            >
+            {loading ? 'Connecting...' : 'Connect Profile'}
           </button>
         </DialogFooter>
       </DialogContent>

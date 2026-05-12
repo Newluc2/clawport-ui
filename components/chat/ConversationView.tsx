@@ -382,7 +382,17 @@ export function ConversationView({ agent, conversation, onUpdate, onBack }: Conv
         body: JSON.stringify({ messages: apiMessages, operatorName: settings.operatorName }),
       })
 
-      if (!res.ok || !res.body) throw new Error('Stream failed')
+      if (!res.ok) {
+        let apiMessage = ''
+        try {
+          const data = await res.json() as { error?: unknown }
+          apiMessage = typeof data.error === 'string' ? data.error : ''
+        } catch {
+          apiMessage = ''
+        }
+        throw new Error(apiMessage || `Request failed (${res.status})`)
+      }
+      if (!res.body) throw new Error('No response stream from API')
 
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
@@ -411,8 +421,10 @@ export function ConversationView({ agent, conversation, onUpdate, onBack }: Conv
 
       const finalContent = fullContent
       onUpdate(agent.id, prev => updateLastMessage(prev, agent.id, assistantMsgId, finalContent, false))
-    } catch {
-      onUpdate(agent.id, prev => updateLastMessage(prev, agent.id, assistantMsgId, 'Error getting response. Check API connection.', false))
+    } catch (err) {
+      const fallback = 'Error getting response. Check API connection.'
+      const message = err instanceof Error && err.message.trim() ? err.message.trim() : fallback
+      onUpdate(agent.id, prev => updateLastMessage(prev, agent.id, assistantMsgId, message, false))
     } finally {
       setIsStreaming(false)
       textareaRef.current?.focus()
