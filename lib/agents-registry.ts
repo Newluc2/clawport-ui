@@ -433,9 +433,12 @@ export interface CliAgentEntry {
 }
 
 export function buildRegistryFromCliAgents(cliAgents: CliAgentEntry[]): AgentEntry[] {
-  const deduped = cliAgents.filter((agent, index, all) =>
-    Boolean(agent.id) && all.findIndex(candidate => candidate.id === agent.id) === index
-  )
+  const seen = new Set<string>()
+  const deduped = cliAgents.filter((agent) => {
+    if (!agent.id || seen.has(agent.id)) return false
+    seen.add(agent.id)
+    return true
+  })
   const defaultId = deduped.find(agent => agent.isDefault)?.id ?? null
   const fallbackRootId = deduped[0]?.id ?? null
 

@@ -1,7 +1,7 @@
 import { CronJob, CronDelivery } from '@/lib/types'
 import { execSync } from 'child_process'
 import { parseSchedule, describeCron } from './cron-utils'
-import { buildRegistryFromCliAgents, loadRegistry } from '@/lib/agents-registry'
+import { loadRegistry } from '@/lib/agents-registry'
 import { extractJson } from '@/lib/cli-utils'
 import { isRemoteOpenClawActive, listRemoteCliAgents, listRemoteCronJobs } from './openclaw-connection-server'
 
@@ -65,7 +65,7 @@ export async function getCrons(): Promise<CronJob[]> {
     // Load known agent IDs for dynamic cron-to-agent matching
     const remoteCliAgents = isRemoteOpenClawActive() ? await listRemoteCliAgents() : null
     const agentIds = remoteCliAgents && remoteCliAgents.length > 0
-      ? buildRegistryFromCliAgents(remoteCliAgents).map(a => a.id)
+      ? remoteCliAgents.map(agent => agent.id).filter(Boolean)
       : loadRegistry().map(a => a.id)
 
     const result = jobs.map((job: unknown) => {

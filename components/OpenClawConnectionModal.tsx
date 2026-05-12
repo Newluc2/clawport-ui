@@ -227,7 +227,7 @@ export function OpenClawConnectionModal({
           </div>
 
           <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
-            Recommended for LAN setup: use SSH Password authentication. Add a gateway token only if the remote gateway token differs from your local environment.
+            Recommended for LAN setup: use SSH Password authentication. Leave the gateway token empty to reuse the local OPENCLAW_GATEWAY_TOKEN, or enter one here if the remote OpenClaw instance uses a different token.
           </div>
 
           <label style={{ display: 'grid', gap: 6 }}>

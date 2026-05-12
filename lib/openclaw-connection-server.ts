@@ -83,8 +83,13 @@ function toErrorMessage(err: unknown): string {
   return 'Unknown connection error'
 }
 
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`
+const SAFE_REMOTE_SHELL_TOKEN = /^[A-Za-z0-9_./:=+-]+$/
+
+function assertSafeRemoteShellToken(value: string, label: string): string {
+  if (!SAFE_REMOTE_SHELL_TOKEN.test(value)) {
+    throw new Error(`Unsafe remote shell ${label}`)
+  }
+  return value
 }
 
 function setState(partial: Partial<RuntimeState>) {
@@ -412,10 +417,10 @@ async function getRemoteOpenClawBin(): Promise<string> {
   if (tunnel.remoteOpenClawBin) return tunnel.remoteOpenClawBin
 
   try {
-    const detected = await execOnActiveTunnel(`sh -lc ${shellQuote('command -v openclaw')}`, 5000)
-    tunnel.remoteOpenClawBin = detected || 'openclaw'
+    const detected = await execOnActiveTunnel('command -v openclaw', 5000)
+    tunnel.remoteOpenClawBin = assertSafeRemoteShellToken(detected, 'binary path')
   } catch {
-    tunnel.remoteOpenClawBin = 'openclaw'
+    throw new Error('Unable to find the openclaw binary on the remote host')
   }
 
   return tunnel.remoteOpenClawBin
@@ -423,8 +428,11 @@ async function getRemoteOpenClawBin(): Promise<string> {
 
 export async function runRemoteOpenClawCommand(args: string[], timeoutMs = 15000): Promise<string> {
   const bin = await getRemoteOpenClawBin()
-  const command = [bin, ...args].map(shellQuote).join(' ')
-  return execOnActiveTunnel(`sh -lc ${shellQuote(command)}`, timeoutMs)
+  const command = [
+    assertSafeRemoteShellToken(bin, 'binary path'),
+    ...args.map((arg, index) => assertSafeRemoteShellToken(arg, `argument ${index + 1}`)),
+  ].join(' ')
+  return execOnActiveTunnel(command, timeoutMs)
 }
 
 export async function listRemoteCliAgents(): Promise<CliAgentEntry[] | null> {
@@ -445,13 +453,14 @@ export async function listRemoteCronJobs(): Promise<unknown[] | null> {
   try {
     const raw = await runRemoteOpenClawCommand(['cron', 'list', '--json'])
     const parsed = extractJson(raw) as Record<string, unknown> | unknown[]
-    const jobs = Array.isArray(parsed)
-      ? parsed
-      : Array.isArray((parsed as Record<string, unknown>).jobs)
-        ? (parsed as Record<string, unknown>).jobs as unknown[]
-        : Array.isArray((parsed as Record<string, unknown>).data)
-          ? (parsed as Record<string, unknown>).data as unknown[]
-          : []
+    let jobs: unknown[] = []
+    if (Array.isArray(parsed)) {
+      jobs = parsed
+    } else if (Array.isArray((parsed as Record<string, unknown>).jobs)) {
+      jobs = (parsed as Record<string, unknown>).jobs as unknown[]
+    } else if (Array.isArray((parsed as Record<string, unknown>).data)) {
+      jobs = (parsed as Record<string, unknown>).data as unknown[]
+    }
     return jobs
   } catch {
     return null
