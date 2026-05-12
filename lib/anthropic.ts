@@ -114,6 +114,7 @@ export async function sendViaOpenClaw(opts: {
   gatewayToken: string
   message: string
   attachments: OpenClawAttachment[]
+  gatewayWsUrl?: string
   sessionKey?: string
   timeoutMs?: number
 }): Promise<string | null> {
@@ -137,6 +138,7 @@ export async function sendViaOpenClaw(opts: {
   const sendResult = await execCli(openclawBin, [
     'gateway', 'call', 'chat.send',
     '--params', sendParams,
+    ...(opts.gatewayWsUrl ? ['--url', opts.gatewayWsUrl] : []),
     '--token', token,
     '--json',
   ], 15000)
@@ -168,6 +170,7 @@ export async function sendViaOpenClaw(opts: {
     const historyResult = await execCli(openclawBin, [
       'gateway', 'call', 'chat.history',
       '--params', historyParams,
+      ...(opts.gatewayWsUrl ? ['--url', opts.gatewayWsUrl] : []),
       '--token', token,
       '--json',
     ], 10000)

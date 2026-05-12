@@ -7,7 +7,9 @@ import { useSettings } from '@/app/settings-provider'
 import { useAgentsContext } from '@/app/agents-provider'
 import { AgentAvatar } from '@/components/AgentAvatar'
 import { OnboardingWizard } from '@/components/OnboardingWizard'
+import { OpenClawConnectionModal } from '@/components/OpenClawConnectionModal'
 import { deleteOnServer } from '@/lib/conversations'
+import { useOpenClawConnection } from '@/lib/useOpenClawConnection'
 
 // ---------------------------------------------------------------------------
 // Accent color presets
@@ -77,7 +79,9 @@ export default function SettingsPage() {
   } = useSettings()
 
   const { agents, refresh: refreshAgents, loading: agentsLoading } = useAgentsContext()
+  const { status: connectionStatus, reconnect } = useOpenClawConnection()
   const [wizardOpen, setWizardOpen] = useState(false)
+  const [connectionModalOpen, setConnectionModalOpen] = useState(false)
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null)
   const [rescanResult, setRescanResult] = useState<string | null>(null)
   const [nameValue, setNameValue] = useState(settings.portalName ?? '')
@@ -851,7 +855,94 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* ── Section 4: Reset All ── */}
+        {/* ── Section 4: OpenClaw Remote Connection ── */}
+        <section style={{ marginBottom: 'var(--space-8)' }}>
+          <div
+            style={{
+              fontSize: 'var(--text-caption1)',
+              fontWeight: 'var(--weight-semibold)',
+              letterSpacing: 'var(--tracking-wide)',
+              textTransform: 'uppercase',
+              color: 'var(--text-tertiary)',
+              padding: '0 var(--space-4) var(--space-2)',
+            }}
+          >
+            OpenClaw Remote Connection
+          </div>
+          <div
+            style={{
+              background: 'var(--material-regular)',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--separator)',
+              padding: 'var(--space-4)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 'var(--space-3)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background:
+                    connectionStatus.status === 'connected'
+                      ? 'var(--system-green)'
+                      : connectionStatus.status === 'error'
+                        ? 'var(--system-red)'
+                        : 'var(--text-quaternary)',
+                }}
+              />
+              <span style={{ fontSize: 'var(--text-footnote)', color: 'var(--text-secondary)' }}>
+                {connectionStatus.status === 'connected'
+                  ? `Tunnel actif${connectionStatus.localPort ? ` (localhost:${connectionStatus.localPort})` : ''}`
+                  : connectionStatus.status === 'connecting'
+                    ? 'Connexion du tunnel en cours...'
+                    : connectionStatus.status === 'error'
+                      ? `Erreur tunnel${connectionStatus.message ? `: ${connectionStatus.message}` : ''}`
+                      : 'Aucun tunnel actif'}
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+              <button
+                onClick={() => setConnectionModalOpen(true)}
+                className="btn-scale"
+                style={{
+                  padding: 'var(--space-2) var(--space-3)',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'var(--accent)',
+                  color: 'var(--accent-contrast)',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: 'var(--text-footnote)',
+                  fontWeight: 'var(--weight-medium)',
+                }}
+              >
+                Ouvrir la connexion SSH
+              </button>
+              <button
+                onClick={() => reconnect().catch(() => {})}
+                disabled={!connectionStatus.hasReconnectCredentials}
+                className="btn-scale"
+                style={{
+                  padding: 'var(--space-2) var(--space-3)',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'var(--fill-tertiary)',
+                  color: 'var(--text-primary)',
+                  border: '1px solid var(--separator)',
+                  cursor: connectionStatus.hasReconnectCredentials ? 'pointer' : 'not-allowed',
+                  fontSize: 'var(--text-footnote)',
+                  opacity: connectionStatus.hasReconnectCredentials ? 1 : 0.6,
+                }}
+              >
+                Reconnexion
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Section 5: Reset All ── */}
         <section>
           <div
             style={{
@@ -978,6 +1069,10 @@ export default function SettingsPage() {
         {wizardOpen && (
           <OnboardingWizard forceOpen onClose={() => setWizardOpen(false)} />
         )}
+        <OpenClawConnectionModal
+          open={connectionModalOpen}
+          onOpenChange={setConnectionModalOpen}
+        />
       </div>
     </div>
   )

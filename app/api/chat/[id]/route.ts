@@ -4,15 +4,15 @@ import { getAgent } from '@/lib/agents'
 import { validateChatMessages } from '@/lib/validation'
 import { hasImageContent, extractImageAttachments, buildTextPrompt, sendViaOpenClaw } from '@/lib/anthropic'
 import { getOpenAIClient } from '@/lib/openai'
+import { getActiveGatewayConnection } from '@/lib/openclaw-connection-server'
 import type OpenAI from 'openai'
-
-const GATEWAY_TOKEN = process.env.OPENCLAW_GATEWAY_TOKEN || ''
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const openai = getOpenAIClient()
+  const gateway = getActiveGatewayConnection()
   const { id } = await params
   const agent = await getAgent(id)
 
@@ -56,12 +56,13 @@ export async function POST(
   const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')
   const latestHasImages = lastUserMsg ? hasImageContent([lastUserMsg]) : false
 
-  if (latestHasImages && GATEWAY_TOKEN) {
+  if (latestHasImages && gateway.token) {
     const attachments = extractImageAttachments([lastUserMsg!])
     const textPrompt = buildTextPrompt(systemPrompt, messages)
 
     const response = await sendViaOpenClaw({
-      gatewayToken: GATEWAY_TOKEN,
+      gatewayToken: gateway.token,
+      gatewayWsUrl: gateway.wsUrl,
       message: textPrompt,
       attachments,
     })
