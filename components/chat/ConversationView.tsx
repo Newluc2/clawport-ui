@@ -390,7 +390,7 @@ export function ConversationView({ agent, conversation, onUpdate, onBack }: Conv
         } catch {
           apiMessage = ''
         }
-        throw new Error(apiMessage || `Request failed (${res.status})`)
+        throw new Error(apiMessage || `Request failed (${res.status} ${res.statusText})`)
       }
       if (!res.body) throw new Error('No response stream from API')
 
