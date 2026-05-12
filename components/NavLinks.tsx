@@ -8,6 +8,7 @@ import type { LucideIcon } from 'lucide-react';
 import type { CronJob } from '@/lib/types';
 import { useSettings } from '@/app/settings-provider';
 import { useAgentsContext } from '@/app/agents-provider';
+import { useOpenClawConnection } from '@/lib/useOpenClawConnection';
 
 function getInitials(name: string | null): string {
   if (!name) return '??'
@@ -47,6 +48,7 @@ export function NavLinks({ bottomSlot }: { bottomSlot?: React.ReactNode } = {}) 
   const pathname = usePathname();
   const { settings } = useSettings();
   const { agents } = useAgentsContext();
+  const { status: connectionStatus, reconnect } = useOpenClawConnection();
   const agentCount = agents.length > 0 ? agents.length : null;
   const [cronCount, setCronCount] = useState<number | null>(null);
   const [cronErrorCount, setCronErrorCount] = useState<number | null>(null);
@@ -213,6 +215,72 @@ export function NavLinks({ bottomSlot }: { bottomSlot?: React.ReactNode } = {}) 
             padding: '8px 16px',
           }}
         >
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              marginBottom: '8px',
+              gap: '8px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+              <span
+                style={{
+                  width: '7px',
+                  height: '7px',
+                  borderRadius: '50%',
+                  background:
+                    connectionStatus.status === 'connected'
+                      ? 'var(--system-green)'
+                      : connectionStatus.status === 'error'
+                        ? 'var(--system-red)'
+                        : 'var(--text-quaternary)',
+                  flexShrink: 0,
+                }}
+              />
+              <span
+                style={{
+                  fontSize: '11px',
+                  color: 'var(--text-tertiary)',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+                title={
+                  connectionStatus.status === 'connected'
+                    ? `Tunnel active${connectionStatus.localPort ? ` localhost:${connectionStatus.localPort}` : ''}`
+                    : connectionStatus.status === 'error'
+                      ? connectionStatus.message || 'Tunnel error'
+                      : 'Tunnel disconnected'
+                }
+              >
+                {connectionStatus.status === 'connected'
+                  ? 'Tunnel active'
+                  : connectionStatus.status === 'error'
+                    ? 'Tunnel error'
+                    : 'Tunnel off'}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => reconnect().catch(() => {})}
+              disabled={!connectionStatus.hasReconnectCredentials}
+              style={{
+                fontSize: '10px',
+                padding: '2px 6px',
+                borderRadius: '6px',
+                border: '1px solid var(--separator)',
+                background: 'var(--fill-tertiary)',
+                color: 'var(--text-secondary)',
+                cursor: connectionStatus.hasReconnectCredentials ? 'pointer' : 'not-allowed',
+                opacity: connectionStatus.hasReconnectCredentials ? 1 : 0.6,
+                flexShrink: 0,
+              }}
+            >
+              Retry
+            </button>
+          </div>
           <div className="flex items-center gap-2.5">
             <div
               style={{
