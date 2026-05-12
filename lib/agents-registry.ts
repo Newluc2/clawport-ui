@@ -423,13 +423,48 @@ export function clearRegistryCache(): void {
  *   { id, identityName, identityEmoji, identitySource,
  *     workspace, agentDir, model, bindings, isDefault, routes }
  */
-interface CliAgentEntry {
+export interface CliAgentEntry {
   id: string
   identityName?: string
   identityEmoji?: string
   model?: string
   workspace?: string
   isDefault?: boolean
+}
+
+export function buildRegistryFromCliAgents(cliAgents: CliAgentEntry[]): AgentEntry[] {
+  const seen = new Set<string>()
+  const deduped = cliAgents.filter((agent) => {
+    if (!agent.id || seen.has(agent.id)) return false
+    seen.add(agent.id)
+    return true
+  })
+  const defaultId = deduped.find(agent => agent.isDefault)?.id ?? null
+  const fallbackRootId = deduped[0]?.id ?? null
+
+  return deduped.map((cli, index) => {
+    const name = cli.identityName || slugToName(cli.id)
+    const isRoot = defaultId ? cli.id === defaultId : index === 0
+    const directReports = isRoot
+      ? deduped.filter(agent => agent.id !== cli.id).map(agent => agent.id)
+      : []
+
+    return {
+      id: cli.id,
+      name,
+      title: isRoot ? 'Orchestrator' : 'Agent',
+      reportsTo: !isRoot ? (defaultId || fallbackRootId) : null,
+      directReports,
+      soulPath: null,
+      voiceId: null,
+      color: DISCOVER_COLORS[index % DISCOVER_COLORS.length],
+      emoji: cli.identityEmoji || name.charAt(0).toUpperCase(),
+      tools: ['read', 'write'],
+      model: cli.model || null,
+      memoryPath: null,
+      description: `${name} agent.`,
+    }
+  })
 }
 
 /**

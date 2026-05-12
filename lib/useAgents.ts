@@ -106,5 +106,16 @@ export function useAgents(): UseAgentsResult {
     }
   }, [checkFingerprint])
 
+  useEffect(() => {
+    function handleConnectionChanged() {
+      refresh()
+    }
+
+    window.addEventListener('clawport:openclaw-connection-changed', handleConnectionChanged)
+    return () => {
+      window.removeEventListener('clawport:openclaw-connection-changed', handleConnectionChanged)
+    }
+  }, [refresh])
+
   return { agents, loading, error, refresh, lastUpdated }
 }

@@ -1,5 +1,7 @@
 import { createServer, type Server } from 'net'
 import { Client, type ClientChannel } from 'ssh2'
+import { extractJobsArray, extractJson } from './cli-utils'
+import type { CliAgentEntry } from './agents-registry'
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error'
 export type SshAuthMethod = 'privateKey' | 'password'
@@ -41,6 +43,7 @@ interface ActiveTunnel {
   server: Server
   localPort: number
   profile: OpenClawConnectionProfile
+  remoteOpenClawBin: string | null
 }
 
 interface StoredReconnectSecrets {
@@ -78,6 +81,20 @@ function normalizePort(value: number | undefined, fallback: number): number {
 function toErrorMessage(err: unknown): string {
   if (err instanceof Error && err.message) return err.message
   return 'Unknown connection error'
+}
+
+const SAFE_REMOTE_SHELL_TOKEN = /^[A-Za-z0-9_./:+-]+$/
+
+function assertSafeRemoteShellToken(value: string, label: string): string {
+  if (!SAFE_REMOTE_SHELL_TOKEN.test(value)) {
+    throw new Error(`Unsafe remote shell ${label}`)
+  }
+  return value
+}
+
+function shellQuote(value: string): string {
+  // POSIX-safe single-quote escaping: close quote, escaped quote, reopen.
+  return `'${value.replace(/'/g, `'\\''`)}'`
 }
 
 function setState(partial: Partial<RuntimeState>) {
@@ -284,7 +301,7 @@ export async function connectOpenClawTunnel(input: {
     reconnectSecrets = secrets
     scheduleReconnectSecretsExpiry()
 
-    activeTunnel = { client, server, localPort, profile }
+    activeTunnel = { client, server, localPort, profile, remoteOpenClawBin: null }
 
     client.on('close', () => {
       if (activeTunnel?.client === client) {
@@ -340,6 +357,110 @@ export function clearReconnectCredentials() {
 
 export function getOpenClawConnectionStatus(): RuntimeState {
   return { ...state }
+}
+
+export function isRemoteOpenClawActive(): boolean {
+  return Boolean(activeTunnel && state.status === 'connected' && state.usesTunnel)
+}
+
+async function execOnActiveTunnel(command: string, timeoutMs = SSH_CONNECTION_TIMEOUT_MS): Promise<string> {
+  const tunnel = activeTunnel
+  if (!tunnel) {
+    throw new Error('No active SSH tunnel')
+  }
+
+  return new Promise((resolve, reject) => {
+    let stdout = ''
+    let stderr = ''
+    let settled = false
+
+    const timeout = setTimeout(() => {
+      if (settled) return
+      settled = true
+      reject(new Error('Remote command timed out'))
+    }, timeoutMs)
+
+    tunnel.client.exec(command, (err, stream) => {
+      if (err) {
+        clearTimeout(timeout)
+        reject(err)
+        return
+      }
+
+      stream.on('data', (chunk: Buffer | string) => {
+        stdout += chunk.toString()
+      })
+
+      stream.stderr.on('data', (chunk: Buffer | string) => {
+        stderr += chunk.toString()
+      })
+
+      stream.on('close', (code?: number) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timeout)
+        if (code && code !== 0) {
+          reject(new Error(stderr.trim() || `Remote command failed with exit code ${code}`))
+          return
+        }
+        resolve(stdout.trim())
+      })
+
+      stream.on('error', (streamErr: Error) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timeout)
+        reject(streamErr)
+      })
+    })
+  })
+}
+
+async function getRemoteOpenClawBin(): Promise<string> {
+  const tunnel = activeTunnel
+  if (!tunnel) throw new Error('No active SSH tunnel')
+  if (tunnel.remoteOpenClawBin) return tunnel.remoteOpenClawBin
+
+  try {
+    const detected = await execOnActiveTunnel('command -v openclaw', 5000)
+    tunnel.remoteOpenClawBin = assertSafeRemoteShellToken(detected, 'binary path')
+  } catch {
+    throw new Error('Unable to find the openclaw binary on the remote host')
+  }
+
+  return tunnel.remoteOpenClawBin
+}
+
+export async function runRemoteOpenClawCommand(args: string[], timeoutMs = 15000): Promise<string> {
+  const bin = await getRemoteOpenClawBin()
+  const command = [
+    assertSafeRemoteShellToken(bin, 'binary path'),
+    ...args.map((arg, index) => assertSafeRemoteShellToken(arg, `argument ${index + 1}`)),
+  ].map(shellQuote).join(' ')
+  return execOnActiveTunnel(command, timeoutMs)
+}
+
+export async function listRemoteCliAgents(): Promise<CliAgentEntry[] | null> {
+  if (!isRemoteOpenClawActive()) return null
+
+  try {
+    const raw = await runRemoteOpenClawCommand(['agents', 'list', '--json'])
+    const parsed = extractJson(raw)
+    return Array.isArray(parsed) ? parsed as CliAgentEntry[] : null
+  } catch {
+    return null
+  }
+}
+
+export async function listRemoteCronJobs(): Promise<unknown[] | null> {
+  if (!isRemoteOpenClawActive()) return null
+
+  try {
+    const raw = await runRemoteOpenClawCommand(['cron', 'list', '--json'])
+    return extractJobsArray(extractJson(raw))
+  } catch {
+    return null
+  }
 }
 
 export function getActiveGatewayConnection(): GatewayConnectionTarget {
