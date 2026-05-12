@@ -79,10 +79,10 @@ export function OpenClawConnectionModal({
   }, [open])
 
   const statusLabel = useMemo(() => {
-    if (status.status === 'connected') return 'Actif'
-    if (status.status === 'connecting') return 'Connexion...'
-    if (status.status === 'error') return 'Erreur'
-    return 'Déconnecté'
+    if (status.status === 'connected') return 'Active'
+    if (status.status === 'connecting') return 'Connecting...'
+    if (status.status === 'error') return 'Error'
+    return 'Disconnected'
   }, [status.status])
 
   const canSubmit =
@@ -95,7 +95,7 @@ export function OpenClawConnectionModal({
     setFormError(null)
 
     if (!canSubmit) {
-      setFormError('Renseigne les champs obligatoires pour ouvrir le tunnel SSH.')
+      setFormError('Please fill in all required fields to open the SSH tunnel.')
       return
     }
 
@@ -123,7 +123,7 @@ export function OpenClawConnectionModal({
       setSshPassphrase('')
       onOpenChange(false)
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Impossible d’établir la connexion')
+      setFormError(err instanceof Error ? err.message : 'Unable to establish connection')
     }
   }
 
@@ -131,9 +131,9 @@ export function OpenClawConnectionModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl" showCloseButton>
         <DialogHeader>
-          <DialogTitle>Connexion OpenClaw distante (SSH tunnel)</DialogTitle>
+          <DialogTitle>Remote OpenClaw Connection (SSH Tunnel)</DialogTitle>
           <DialogDescription>
-            ClawPort créera un tunnel local vers la gateway OpenClaw distante, puis utilisera localhost pour toutes les requêtes.
+            ClawPort will create a local tunnel to the remote OpenClaw gateway, then route requests through localhost.
           </DialogDescription>
         </DialogHeader>
 
@@ -145,7 +145,7 @@ export function OpenClawConnectionModal({
 
           <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 160px' }}>
             <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>IP/Hostname OpenClaw</span>
+              <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>OpenClaw IP/Hostname</span>
               <input
                 className="apple-input"
                 value={profile.gatewayHost}
@@ -154,7 +154,7 @@ export function OpenClawConnectionModal({
               />
             </label>
             <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Port gateway</span>
+              <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Gateway Port</span>
               <input
                 className="apple-input"
                 type="number"
@@ -167,7 +167,7 @@ export function OpenClawConnectionModal({
 
           <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 120px 1fr' }}>
             <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Host SSH</span>
+              <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>SSH Host</span>
               <input
                 className="apple-input"
                 value={profile.sshHost}
@@ -176,7 +176,7 @@ export function OpenClawConnectionModal({
               />
             </label>
             <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Port SSH</span>
+              <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>SSH Port</span>
               <input
                 className="apple-input"
                 type="number"
@@ -186,7 +186,7 @@ export function OpenClawConnectionModal({
               />
             </label>
             <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Utilisateur SSH</span>
+              <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>SSH User</span>
               <input
                 className="apple-input"
                 value={profile.sshUser}
@@ -203,7 +203,7 @@ export function OpenClawConnectionModal({
                 checked={profile.sshAuthMethod === 'privateKey'}
                 onChange={() => setProfile({ ...profile, sshAuthMethod: 'privateKey' })}
               />
-              Clé privée
+              Private Key
             </label>
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
               <input
@@ -211,14 +211,14 @@ export function OpenClawConnectionModal({
                 checked={profile.sshAuthMethod === 'password'}
                 onChange={() => setProfile({ ...profile, sshAuthMethod: 'password' })}
               />
-              Mot de passe
+              Password
             </label>
           </div>
 
           {profile.sshAuthMethod === 'privateKey' ? (
             <>
               <label style={{ display: 'grid', gap: 6 }}>
-                <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Clé privée SSH (non persistée)</span>
+                <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>SSH Private Key (not persisted)</span>
                 <textarea
                   className="apple-input"
                   value={sshPrivateKey}
@@ -229,7 +229,7 @@ export function OpenClawConnectionModal({
                 />
               </label>
               <label style={{ display: 'grid', gap: 6 }}>
-                <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Passphrase SSH (optionnelle, non persistée)</span>
+                <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>SSH Passphrase (optional, not persisted)</span>
                 <input
                   className="apple-input"
                   type="password"
@@ -240,7 +240,7 @@ export function OpenClawConnectionModal({
             </>
           ) : (
             <label style={{ display: 'grid', gap: 6 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Mot de passe SSH (non persisté)</span>
+              <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>SSH Password (not persisted)</span>
               <input
                 className="apple-input"
                 type="password"
@@ -251,7 +251,7 @@ export function OpenClawConnectionModal({
           )}
 
           <label style={{ display: 'grid', gap: 6 }}>
-            <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>Token OpenClaw (optionnel, non persisté)</span>
+            <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>OpenClaw Token (optional, not persisted)</span>
             <input
               className="apple-input"
               type="password"
@@ -285,7 +285,7 @@ export function OpenClawConnectionModal({
                 opacity: loading || !status.hasReconnectCredentials ? 0.6 : 1,
               }}
             >
-              Reconnecter
+              Reconnect
             </button>
             <button
               type="button"
@@ -302,7 +302,7 @@ export function OpenClawConnectionModal({
                 opacity: loading || status.status === 'disconnected' ? 0.6 : 1,
               }}
             >
-              Déconnecter
+              Disconnect
             </button>
           </div>
           <button
@@ -320,7 +320,7 @@ export function OpenClawConnectionModal({
               opacity: loading ? 0.7 : 1,
             }}
           >
-            {loading ? 'Connexion...' : 'Connecter'}
+            {loading ? 'Connecting...' : 'Connect'}
           </button>
         </DialogFooter>
       </DialogContent>

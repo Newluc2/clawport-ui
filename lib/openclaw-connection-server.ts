@@ -52,10 +52,13 @@ interface StoredReconnectSecrets {
 
 const DEFAULT_GATEWAY_PORT = 18789
 const DEFAULT_SSH_PORT = 22
+const SSH_CONNECTION_TIMEOUT_MS = 15000
+const RECONNECT_SECRETS_TTL_MS = 30 * 60 * 1000
 
 let activeTunnel: ActiveTunnel | null = null
 let reconnectProfile: OpenClawConnectionProfile | null = null
 let reconnectSecrets: StoredReconnectSecrets | null = null
+let reconnectSecretsExpiryTimer: ReturnType<typeof setTimeout> | null = null
 
 const state: RuntimeState = {
   status: 'disconnected',
@@ -78,6 +81,20 @@ function toErrorMessage(err: unknown): string {
 
 function setState(partial: Partial<RuntimeState>) {
   Object.assign(state, partial)
+}
+
+function clearReconnectSecretsTimer() {
+  if (!reconnectSecretsExpiryTimer) return
+  clearTimeout(reconnectSecretsExpiryTimer)
+  reconnectSecretsExpiryTimer = null
+}
+
+function scheduleReconnectSecretsExpiry() {
+  clearReconnectSecretsTimer()
+  reconnectSecretsExpiryTimer = setTimeout(() => {
+    reconnectSecrets = null
+    setState({ hasReconnectCredentials: false })
+  }, RECONNECT_SECRETS_TTL_MS)
 }
 
 function resetState(status: ConnectionStatus = 'disconnected', message: string | null = null) {
@@ -142,7 +159,7 @@ function openSshConnection(profile: OpenClawConnectionProfile, secrets: StoredRe
       settled = true
       client.end()
       reject(new Error('SSH connection timed out'))
-    }, 15000)
+    }, SSH_CONNECTION_TIMEOUT_MS)
 
     client.once('ready', () => {
       if (settled) return
@@ -162,7 +179,7 @@ function openSshConnection(profile: OpenClawConnectionProfile, secrets: StoredRe
       host: profile.sshHost,
       port: profile.sshPort,
       username: profile.sshUser,
-      readyTimeout: 15000,
+      readyTimeout: SSH_CONNECTION_TIMEOUT_MS,
       keepaliveInterval: 10000,
       keepaliveCountMax: 3,
     }
@@ -226,7 +243,12 @@ export async function disconnectOpenClawTunnel(message: string | null = null): P
 
   if (tunnel) {
     await new Promise<void>((resolve) => {
-      tunnel.server.close(() => resolve())
+      tunnel.server.close((err) => {
+        if (err) {
+          console.error('SSH tunnel server close error:', err)
+        }
+        resolve()
+      })
     })
     tunnel.client.end()
   }
@@ -258,6 +280,7 @@ export async function connectOpenClawTunnel(input: {
 
     reconnectProfile = profile
     reconnectSecrets = secrets
+    scheduleReconnectSecretsExpiry()
 
     activeTunnel = { client, server, localPort, profile }
 
@@ -306,6 +329,7 @@ export async function reconnectOpenClawTunnel(): Promise<void> {
 }
 
 export function clearReconnectCredentials() {
+  clearReconnectSecretsTimer()
   reconnectSecrets = null
   setState({ hasReconnectCredentials: false })
 }

@@ -896,12 +896,12 @@ export default function SettingsPage() {
               />
               <span style={{ fontSize: 'var(--text-footnote)', color: 'var(--text-secondary)' }}>
                 {connectionStatus.status === 'connected'
-                  ? `Tunnel actif${connectionStatus.localPort ? ` (localhost:${connectionStatus.localPort})` : ''}`
+                  ? `Tunnel active${connectionStatus.localPort ? ` (localhost:${connectionStatus.localPort})` : ''}`
                   : connectionStatus.status === 'connecting'
-                    ? 'Connexion du tunnel en cours...'
+                    ? 'Connecting tunnel...'
                     : connectionStatus.status === 'error'
-                      ? `Erreur tunnel${connectionStatus.message ? `: ${connectionStatus.message}` : ''}`
-                      : 'Aucun tunnel actif'}
+                      ? `Tunnel error${connectionStatus.message ? `: ${connectionStatus.message}` : ''}`
+                      : 'No active tunnel'}
               </span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
@@ -919,7 +919,7 @@ export default function SettingsPage() {
                   fontWeight: 'var(--weight-medium)',
                 }}
               >
-                Ouvrir la connexion SSH
+                Open SSH Connection
               </button>
               <button
                 onClick={() => reconnect().catch(() => {})}
@@ -936,7 +936,7 @@ export default function SettingsPage() {
                   opacity: connectionStatus.hasReconnectCredentials ? 1 : 0.6,
                 }}
               >
-                Reconnexion
+                Reconnect
               </button>
             </div>
           </div>

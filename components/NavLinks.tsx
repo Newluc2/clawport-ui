@@ -249,16 +249,16 @@ export function NavLinks({ bottomSlot }: { bottomSlot?: React.ReactNode } = {}) 
                 }}
                 title={
                   connectionStatus.status === 'connected'
-                    ? `Tunnel actif${connectionStatus.localPort ? ` localhost:${connectionStatus.localPort}` : ''}`
+                    ? `Tunnel active${connectionStatus.localPort ? ` localhost:${connectionStatus.localPort}` : ''}`
                     : connectionStatus.status === 'error'
-                      ? connectionStatus.message || 'Erreur tunnel'
-                      : 'Tunnel déconnecté'
+                      ? connectionStatus.message || 'Tunnel error'
+                      : 'Tunnel disconnected'
                 }
               >
                 {connectionStatus.status === 'connected'
-                  ? 'Tunnel actif'
+                  ? 'Tunnel active'
                   : connectionStatus.status === 'error'
-                    ? 'Tunnel erreur'
+                    ? 'Tunnel error'
                     : 'Tunnel off'}
               </span>
             </div>
@@ -278,7 +278,7 @@ export function NavLinks({ bottomSlot }: { bottomSlot?: React.ReactNode } = {}) 
                 flexShrink: 0,
               }}
             >
-              Reco
+              Retry
             </button>
           </div>
           <div className="flex items-center gap-2.5">
