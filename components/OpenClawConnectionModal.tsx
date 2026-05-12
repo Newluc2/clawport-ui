@@ -69,6 +69,7 @@ export function OpenClawConnectionModal({
   const [sshPassword, setSshPassword] = useState('')
   const [sshPrivateKey, setSshPrivateKey] = useState('')
   const [sshPassphrase, setSshPassphrase] = useState('')
+  const [gatewayToken, setGatewayToken] = useState('')
   const [formError, setFormError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -111,6 +112,7 @@ export function OpenClawConnectionModal({
       sshPassword: profile.sshAuthMethod === 'password' ? sshPassword : undefined,
       sshPrivateKey: profile.sshAuthMethod === 'privateKey' ? sshPrivateKey : undefined,
       sshPassphrase: profile.sshAuthMethod === 'privateKey' ? sshPassphrase || undefined : undefined,
+      gatewayToken: gatewayToken.trim() || undefined,
     }
 
     try {
@@ -119,6 +121,7 @@ export function OpenClawConnectionModal({
       setSshPassword('')
       setSshPrivateKey('')
       setSshPassphrase('')
+      setGatewayToken('')
       onOpenChange(false)
     } catch (err) {
       setFormError(err instanceof Error ? err.message : 'Unable to establish connection')
@@ -224,8 +227,19 @@ export function OpenClawConnectionModal({
           </div>
 
           <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
-            Recommended for LAN setup: use SSH Password authentication. Gateway token is not required for this tunnel form.
+            Recommended for LAN setup: use SSH Password authentication. Add a gateway token only if the remote gateway token differs from your local environment.
           </div>
+
+          <label style={{ display: 'grid', gap: 6 }}>
+            <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>OpenClaw Gateway Token (optional, not persisted)</span>
+            <input
+              className="apple-input"
+              type="password"
+              value={gatewayToken}
+              onChange={(e) => setGatewayToken(e.target.value)}
+              placeholder="Falls back to OPENCLAW_GATEWAY_TOKEN when empty"
+            />
+          </label>
 
           {profile.sshAuthMethod === 'privateKey' ? (
             <>
