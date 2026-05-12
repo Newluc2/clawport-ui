@@ -19,6 +19,7 @@ const DEFAULT_STATUS: OpenClawConnectionStatus = {
   hasReconnectCredentials: false,
   usesTunnel: false,
 }
+const REFRESH_INTERVAL_MS = 3000
 
 export function useOpenClawConnection() {
   const [status, setStatus] = useState<OpenClawConnectionStatus>(DEFAULT_STATUS)
@@ -43,7 +44,7 @@ export function useOpenClawConnection() {
 
     const timer = window.setInterval(() => {
       refresh().catch(() => {})
-    }, 3000)
+    }, REFRESH_INTERVAL_MS)
 
     return () => window.clearInterval(timer)
   }, [refresh])

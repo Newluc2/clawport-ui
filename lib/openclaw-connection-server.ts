@@ -53,7 +53,8 @@ interface StoredReconnectSecrets {
 const DEFAULT_GATEWAY_PORT = 18789
 const DEFAULT_SSH_PORT = 22
 const SSH_CONNECTION_TIMEOUT_MS = 15000
-const RECONNECT_SECRETS_TTL_MS = 30 * 60 * 1000
+const RECONNECT_SECRETS_TTL_MINUTES = 30
+const RECONNECT_SECRETS_TTL_MS = RECONNECT_SECRETS_TTL_MINUTES * 60 * 1000
 
 let activeTunnel: ActiveTunnel | null = null
 let reconnectProfile: OpenClawConnectionProfile | null = null
@@ -70,7 +71,7 @@ const state: RuntimeState = {
 }
 
 function normalizePort(value: number | undefined, fallback: number): number {
-  if (!value || !Number.isFinite(value) || value <= 0) return fallback
+  if (value === undefined || !Number.isFinite(value) || value <= 0) return fallback
   return Math.floor(value)
 }
 
@@ -93,7 +94,8 @@ function scheduleReconnectSecretsExpiry() {
   clearReconnectSecretsTimer()
   reconnectSecretsExpiryTimer = setTimeout(() => {
     reconnectSecrets = null
-    setState({ hasReconnectCredentials: false })
+    reconnectProfile = null
+    setState({ hasReconnectCredentials: false, profile: null })
   }, RECONNECT_SECRETS_TTL_MS)
 }
 
@@ -286,6 +288,7 @@ export async function connectOpenClawTunnel(input: {
 
     client.on('close', () => {
       if (activeTunnel?.client === client) {
+        activeTunnel.server.close(() => {})
         activeTunnel = null
         resetState('error', 'SSH tunnel closed')
       }
@@ -293,6 +296,7 @@ export async function connectOpenClawTunnel(input: {
 
     client.on('error', (err: Error) => {
       if (activeTunnel?.client === client) {
+        activeTunnel.server.close(() => {})
         activeTunnel = null
         resetState('error', `SSH error: ${toErrorMessage(err)}`)
       }

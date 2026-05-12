@@ -139,7 +139,7 @@ export function OpenClawConnectionModal({
 
         <div className="grid gap-4">
           <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-            Statut: <strong style={{ color: 'var(--text-primary)' }}>{statusLabel}</strong>
+            Status: <strong style={{ color: 'var(--text-primary)' }}>{statusLabel}</strong>
             {status.localPort ? ` (localhost:${status.localPort})` : ''}
           </div>
 
