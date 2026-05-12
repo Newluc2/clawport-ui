@@ -29,7 +29,7 @@ const DEFAULT_PROFILE: PersistedProfile = {
   sshHost: '',
   sshPort: 22,
   sshUser: '',
-  sshAuthMethod: 'privateKey',
+  sshAuthMethod: 'password',
 }
 
 function loadProfile(): PersistedProfile {
@@ -44,7 +44,7 @@ function loadProfile(): PersistedProfile {
       sshHost: typeof parsed.sshHost === 'string' ? parsed.sshHost : '',
       sshPort: typeof parsed.sshPort === 'number' ? parsed.sshPort : 22,
       sshUser: typeof parsed.sshUser === 'string' ? parsed.sshUser : '',
-      sshAuthMethod: parsed.sshAuthMethod === 'password' ? 'password' : 'privateKey',
+      sshAuthMethod: parsed.sshAuthMethod === 'privateKey' ? 'privateKey' : 'password',
     }
   } catch {
     return { ...DEFAULT_PROFILE }
@@ -66,7 +66,6 @@ export function OpenClawConnectionModal({
   const { status, loading, error, connect, reconnect, disconnect } = useOpenClawConnection()
 
   const [profile, setProfile] = useState<PersistedProfile>(() => loadProfile())
-  const [gatewayToken, setGatewayToken] = useState('')
   const [sshPassword, setSshPassword] = useState('')
   const [sshPrivateKey, setSshPrivateKey] = useState('')
   const [sshPassphrase, setSshPassphrase] = useState('')
@@ -109,7 +108,6 @@ export function OpenClawConnectionModal({
     }
 
     const secrets: OpenClawConnectionSecrets = {
-      gatewayToken: gatewayToken.trim() || undefined,
       sshPassword: profile.sshAuthMethod === 'password' ? sshPassword : undefined,
       sshPrivateKey: profile.sshAuthMethod === 'privateKey' ? sshPrivateKey : undefined,
       sshPassphrase: profile.sshAuthMethod === 'privateKey' ? sshPassphrase || undefined : undefined,
@@ -129,7 +127,17 @@ export function OpenClawConnectionModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl" showCloseButton>
+      <DialogContent
+        className="max-h-[90vh] max-w-2xl overflow-y-auto"
+        showCloseButton
+        style={{
+          background: 'var(--material-thick)',
+          borderColor: 'var(--separator)',
+          boxShadow: 'var(--shadow-overlay)',
+          backdropFilter: 'blur(24px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(24px) saturate(180%)',
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Remote OpenClaw Connection (SSH Tunnel)</DialogTitle>
           <DialogDescription>
@@ -215,6 +223,10 @@ export function OpenClawConnectionModal({
             </label>
           </div>
 
+          <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
+            Recommended for LAN setup: use SSH Password authentication. Gateway token is not required for this tunnel form.
+          </div>
+
           {profile.sshAuthMethod === 'privateKey' ? (
             <>
               <label style={{ display: 'grid', gap: 6 }}>
@@ -249,17 +261,6 @@ export function OpenClawConnectionModal({
               />
             </label>
           )}
-
-          <label style={{ display: 'grid', gap: 6 }}>
-            <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>OpenClaw Token (optional, not persisted)</span>
-            <input
-              className="apple-input"
-              type="password"
-              value={gatewayToken}
-              onChange={(e) => setGatewayToken(e.target.value)}
-              placeholder="OPENCLAW_GATEWAY_TOKEN"
-            />
-          </label>
 
           {(formError || error || status.message) && (
             <div style={{ fontSize: 12, color: 'var(--system-red)' }}>
