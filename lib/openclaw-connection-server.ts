@@ -1,5 +1,5 @@
 import { createServer, type Server } from 'net'
-import { Client } from 'ssh2'
+import { Client, type ClientChannel } from 'ssh2'
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error'
 export type SshAuthMethod = 'privateKey' | 'password'
@@ -151,7 +151,7 @@ function openSshConnection(profile: OpenClawConnectionProfile, secrets: StoredRe
       resolve(client)
     })
 
-    client.once('error', (err) => {
+    client.once('error', (err: Error) => {
       if (settled) return
       settled = true
       clearTimeout(timeout)
@@ -188,7 +188,7 @@ function createLocalForwardServer(client: Client, profile: OpenClawConnectionPro
         localSocket.remotePort || 0,
         profile.gatewayHost,
         profile.gatewayPort,
-        (err, stream) => {
+        (err: Error | undefined, stream: ClientChannel) => {
           if (err) {
             localSocket.destroy(err)
             return
@@ -268,7 +268,7 @@ export async function connectOpenClawTunnel(input: {
       }
     })
 
-    client.on('error', (err) => {
+    client.on('error', (err: Error) => {
       if (activeTunnel?.client === client) {
         activeTunnel = null
         resetState('error', `SSH error: ${toErrorMessage(err)}`)

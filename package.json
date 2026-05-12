@@ -71,6 +71,7 @@
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
+    "@types/ssh2": "^1.15.5",
     "@vitejs/plugin-react": "^5.1.4",
     "jsdom": "^28.1.0",
     "shadcn": "^3.8.5",
