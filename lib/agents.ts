@@ -1,10 +1,16 @@
 import { Agent } from '@/lib/types'
 import { readFileSync, existsSync } from 'fs'
-import { loadRegistry } from '@/lib/agents-registry'
+import { buildRegistryFromCliAgents, loadRegistry } from '@/lib/agents-registry'
+import { isRemoteOpenClawActive, listRemoteCliAgents } from '@/lib/openclaw-connection-server'
 
 export async function getAgents(): Promise<Agent[]> {
-  const workspacePath = process.env.WORKSPACE_PATH || ''
-  const registry = loadRegistry()
+  const remoteCliAgents = isRemoteOpenClawActive() ? await listRemoteCliAgents() : null
+  const registry = remoteCliAgents && remoteCliAgents.length > 0
+    ? buildRegistryFromCliAgents(remoteCliAgents)
+    : loadRegistry()
+  const workspacePath = remoteCliAgents && remoteCliAgents.length > 0
+    ? ''
+    : (process.env.WORKSPACE_PATH || '')
 
   return registry.map((entry) => {
     let soul: string | null = null

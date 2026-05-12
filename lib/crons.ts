@@ -1,9 +1,9 @@
 import { CronJob, CronDelivery } from '@/lib/types'
 import { execSync } from 'child_process'
 import { parseSchedule, describeCron } from './cron-utils'
-import { requireEnv } from '@/lib/env'
-import { loadRegistry } from '@/lib/agents-registry'
+import { buildRegistryFromCliAgents, loadRegistry } from '@/lib/agents-registry'
 import { extractJson } from '@/lib/cli-utils'
+import { isRemoteOpenClawActive, listRemoteCliAgents, listRemoteCronJobs } from './openclaw-connection-server'
 
 /**
  * Match a cron job name to an agent by prefix.
@@ -32,30 +32,41 @@ export async function getCrons(): Promise<CronJob[]> {
   }
 
   try {
-    const openclawBin = process.env.OPENCLAW_BIN
-    if (!openclawBin) {
-      // No binary configured -- return empty list instead of crashing
-      return []
-    }
+    let jobs: unknown[]
 
-    let raw: string
-    try {
-      raw = execSync(`${openclawBin} cron list --json`, {
-        encoding: 'utf-8',
-        timeout: 10000,
-      })
-    } catch {
-      // CLI failed (binary not found, no crons, gateway down) -- return empty
-      return []
-    }
+    if (isRemoteOpenClawActive()) {
+      const remoteJobs = await listRemoteCronJobs()
+      if (!remoteJobs) return []
+      jobs = remoteJobs
+    } else {
+      const openclawBin = process.env.OPENCLAW_BIN
+      if (!openclawBin) {
+        // No binary configured -- return empty list instead of crashing
+        return []
+      }
 
-    const parsed = extractJson(raw) as Record<string, unknown>
-    const jobs: unknown[] = Array.isArray(parsed)
-      ? parsed
-      : (parsed.jobs ?? parsed.data ?? []) as unknown[]
+      let raw: string
+      try {
+        raw = execSync(`${openclawBin} cron list --json`, {
+          encoding: 'utf-8',
+          timeout: 10000,
+        })
+      } catch {
+        // CLI failed (binary not found, no crons, gateway down) -- return empty
+        return []
+      }
+
+      const parsed = extractJson(raw) as Record<string, unknown>
+      jobs = Array.isArray(parsed)
+        ? parsed
+        : (parsed.jobs ?? parsed.data ?? []) as unknown[]
+    }
 
     // Load known agent IDs for dynamic cron-to-agent matching
-    const agentIds = loadRegistry().map(a => a.id)
+    const remoteCliAgents = isRemoteOpenClawActive() ? await listRemoteCliAgents() : null
+    const agentIds = remoteCliAgents && remoteCliAgents.length > 0
+      ? buildRegistryFromCliAgents(remoteCliAgents).map(a => a.id)
+      : loadRegistry().map(a => a.id)
 
     const result = jobs.map((job: unknown) => {
       const j = job as Record<string, unknown>

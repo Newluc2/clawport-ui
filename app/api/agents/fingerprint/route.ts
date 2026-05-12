@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { statSync, readdirSync, existsSync } from 'fs'
 import { join } from 'path'
+import { getOpenClawConnectionStatus, listRemoteCliAgents } from '@/lib/openclaw-connection-server'
 
 /**
  * Lightweight fingerprint endpoint for agent change detection.
@@ -14,6 +15,26 @@ import { join } from 'path'
  * execSync CLI calls, multi-workspace merging).
  */
 export async function GET() {
+  const connection = getOpenClawConnectionStatus()
+  if (connection.usesTunnel && connection.status === 'connected') {
+    const remoteAgents = await listRemoteCliAgents()
+    const remoteFingerprint = remoteAgents
+      ? remoteAgents
+        .map(agent => `${agent.id}:${agent.model ?? ''}:${agent.identityName ?? ''}`)
+        .sort()
+      : []
+
+    return NextResponse.json({
+      fingerprint: JSON.stringify([
+        'remote',
+        connection.profile?.gatewayHost ?? '',
+        connection.profile?.sshHost ?? '',
+        connection.localPort ?? 0,
+        remoteFingerprint,
+      ]),
+    })
+  }
+
   const workspacePath = process.env.WORKSPACE_PATH
 
   if (!workspacePath) {

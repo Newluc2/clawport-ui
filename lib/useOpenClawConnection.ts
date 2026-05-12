@@ -21,6 +21,11 @@ const DEFAULT_STATUS: OpenClawConnectionStatus = {
 }
 const REFRESH_INTERVAL_MS = 3000
 
+function notifyConnectionChanged() {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent('clawport:openclaw-connection-changed'))
+}
+
 export function useOpenClawConnection() {
   const [status, setStatus] = useState<OpenClawConnectionStatus>(DEFAULT_STATUS)
   const [loading, setLoading] = useState(false)
@@ -55,6 +60,7 @@ export function useOpenClawConnection() {
     try {
       const next = await connectOpenClawConnection(profile, secrets)
       setStatus(next)
+      notifyConnectionChanged()
       return next
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Connection failed'
@@ -71,6 +77,7 @@ export function useOpenClawConnection() {
     try {
       const next = await reconnectOpenClawConnection()
       setStatus(next)
+      notifyConnectionChanged()
       return next
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Reconnect failed'
@@ -87,6 +94,7 @@ export function useOpenClawConnection() {
     try {
       const next = await disconnectOpenClawConnection()
       setStatus(next)
+      notifyConnectionChanged()
       return next
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Disconnect failed'
