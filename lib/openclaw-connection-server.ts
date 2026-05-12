@@ -93,6 +93,7 @@ function assertSafeRemoteShellToken(value: string, label: string): string {
 }
 
 function shellQuote(value: string): string {
+  // POSIX-safe single-quote escaping: close quote, escaped quote, reopen.
   return `'${value.replace(/'/g, `'\\''`)}'`
 }
 
@@ -421,7 +422,7 @@ async function getRemoteOpenClawBin(): Promise<string> {
   if (tunnel.remoteOpenClawBin) return tunnel.remoteOpenClawBin
 
   try {
-    const detected = await execOnActiveTunnel('type -P openclaw || command -v openclaw', 5000)
+    const detected = await execOnActiveTunnel('command -v openclaw', 5000)
     tunnel.remoteOpenClawBin = assertSafeRemoteShellToken(detected, 'binary path')
   } catch {
     throw new Error('Unable to find the openclaw binary on the remote host')

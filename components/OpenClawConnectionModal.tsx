@@ -73,7 +73,9 @@ function loadProfiles(): PersistedProfile[] {
     if (rawProfiles) {
       const parsed = JSON.parse(rawProfiles) as unknown
       if (Array.isArray(parsed)) {
-        return parsed.map((p) => normalizeProfile((p || {}) as Partial<PersistedProfile>))
+        return parsed
+          .filter((p): p is Partial<PersistedProfile> => Boolean(p && typeof p === 'object'))
+          .map((p) => normalizeProfile(p))
       }
     }
 
@@ -145,7 +147,7 @@ export function OpenClawConnectionModal({
     const savedActiveId = loadActiveProfileId()
     const selected = loaded.find((p) => p.id === savedActiveId) || loaded[0] || createDraftProfile()
 
-    setSelectedProfileId(loaded.find((p) => p.id === selected.id) ? selected.id : '')
+    setSelectedProfileId(selected.id)
     setProfile(selected)
     setGatewayToken(selected.gatewayToken || '')
     setSshPassword('')
