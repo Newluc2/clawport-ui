@@ -147,7 +147,7 @@ export function addConnection(input: {
   const workspacePath = input.workspacePath?.trim() || undefined
 
   if (!label) throw new Error('Connection label is required')
-  if (!gatewayToken) throw new Error('Gateway token is required')
+  if (!gatewayToken) throw new Error('Gateway token or gateway password is required')
 
   const stored = readStoredConnections()
   const next: StoredConnection = {
@@ -262,4 +262,3 @@ export async function fetchRemoteAgents(connection: OpenClawConnection): Promise
     return []
   }
 }
-

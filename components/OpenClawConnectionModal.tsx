@@ -449,17 +449,17 @@ export function OpenClawConnectionModal({
           </div>
 
           <div style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>
-            Recommended for LAN setup: use SSH Password authentication. Leave the gateway token empty to reuse the local OPENCLAW_GATEWAY_TOKEN, or enter one here if the remote OpenClaw instance uses a different token.
+            Recommended for LAN setup: use SSH Password authentication. Leave this empty to reuse local credentials, or enter the remote gateway token/password if it differs.
           </div>
 
           <label style={{ display: 'grid', gap: 6 }}>
-            <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>OpenClaw Gateway Token (optional, saved in this browser profile)</span>
+            <span style={{ fontSize: 12, color: 'var(--text-tertiary)' }}>OpenClaw Gateway Token or Password (optional, saved in this browser profile)</span>
             <input
               className="apple-input"
               type="password"
               value={gatewayToken}
               onChange={(e) => setGatewayToken(e.target.value)}
-              placeholder="Falls back to OPENCLAW_GATEWAY_TOKEN when empty"
+              placeholder="Falls back to local OPENCLAW_GATEWAY_TOKEN when empty"
             />
           </label>
 

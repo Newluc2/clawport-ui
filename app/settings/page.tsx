@@ -1050,6 +1050,9 @@ export default function SettingsPage() {
               <div style={{ fontSize: 'var(--text-footnote)', color: 'var(--text-secondary)', fontWeight: 'var(--weight-medium)' }}>
                 Add remote connection
               </div>
+              <div style={{ fontSize: 'var(--text-caption2)', color: 'var(--text-tertiary)' }}>
+                Use an SSH tunnel to the remote machine and route ClawPort through <code>http://localhost:18790</code> (example: <code>ssh -N -L 18790:127.0.0.1:18789 user@remote-host</code>).
+              </div>
               <input
                 className="apple-input"
                 placeholder="Label (e.g. Proxmox-LAN)"
@@ -1058,13 +1061,13 @@ export default function SettingsPage() {
               />
               <input
                 className="apple-input"
-                placeholder="Gateway URL (e.g. http://localhost:18790)"
+                placeholder="Gateway URL via SSH tunnel (e.g. http://localhost:18790)"
                 value={newConnection.gatewayUrl}
                 onChange={(e) => setNewConnection((prev) => ({ ...prev, gatewayUrl: e.target.value }))}
               />
               <input
                 className="apple-input"
-                placeholder="Gateway token"
+                placeholder="Gateway token or gateway password"
                 value={newConnection.gatewayToken}
                 onChange={(e) => setNewConnection((prev) => ({ ...prev, gatewayToken: e.target.value }))}
               />
