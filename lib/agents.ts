@@ -46,7 +46,7 @@ export async function getAgents(): Promise<Agent[]> {
   const connections = listConnections()
   const localConnection = connections.find((connection) => connection.isLocal) || connections[0]
   const localAgents = localConnection
-    ? buildConnectionAgents(localConnection, loadRegistry())
+    ? buildConnectionAgents(localConnection, loadRegistry({ includeExtraWorkspaces: false }))
     : []
 
   const remoteConnections = connections.filter((connection) => !connection.isLocal)

@@ -1086,7 +1086,7 @@ describe('getAgent', () => {
 // workspace for sub-agent hierarchies via discoverAgents().
 // ---------------------------------------------------------------------------
 
-describe('CLI agent discovery (multi-workspace)', () => {
+describe('CLI agent discovery (local workspace only)', () => {
   /**
    * Primary workspace at /tmp/ws with root Jarvis + echo agent.
    * OPENCLAW_BIN set so CLI calls are attempted.
@@ -1156,10 +1156,7 @@ describe('CLI agent discovery (multi-workspace)', () => {
     // Should NOT have a duplicate 'main' entry since only 1 CLI agent (no merge triggered)
   })
 
-  it('discovers agents from a second workspace via CLI', async () => {
-    // Primary workspace has Jarvis + echo
-    // CLI shows a second agent "work" with a different workspace at /tmp/ws-work
-    // That workspace has a SOUL.md + a "helper" agent
+  it('does not merge agents from a second workspace via CLI', async () => {
     setupPrimaryWorkspace()
 
     // Extend existsSync to handle the second workspace
@@ -1199,15 +1196,15 @@ describe('CLI agent discovery (multi-workspace)', () => {
 
     const agents = await getAgents()
     const ids = agents.map(a => a.id)
-    // Primary workspace agents
+    // Primary workspace agents remain
     expect(ids).toContain('jarvis')
     expect(ids).toContain('echo')
-    // Second workspace agents discovered via filesystem scan
-    expect(ids).toContain('workbot') // root of second workspace (from IDENTITY.md)
-    expect(ids).toContain('helper')
+    // Other workspaces are intentionally ignored in local view
+    expect(ids).not.toContain('workbot')
+    expect(ids).not.toContain('helper')
   })
 
-  it('second workspace root becomes top-level peer (reportsTo=null)', async () => {
+  it('ignores second workspace roots entirely', async () => {
     setupPrimaryWorkspace()
 
     const origExists = mockExistsSync.getMockImplementation()!
@@ -1232,11 +1229,10 @@ describe('CLI agent discovery (multi-workspace)', () => {
 
     const agents = await getAgents()
     const secondBot = agents.find(a => a.id === 'secondbot')
-    expect(secondBot).toBeDefined()
-    expect(secondBot!.reportsTo).toBeNull() // independent, not under Jarvis
+    expect(secondBot).toBeUndefined()
   })
 
-  it('creates minimal entry when extra workspace has no discoverable agents', async () => {
+  it('does not create minimal entries for extra workspaces', async () => {
     setupPrimaryWorkspace()
 
     // Second workspace has nothing discoverable (no SOUL.md, no agents/ dir)
@@ -1253,14 +1249,10 @@ describe('CLI agent discovery (multi-workspace)', () => {
 
     const agents = await getAgents()
     const emptyBot = agents.find(a => a.id === 'empty-bot')
-    expect(emptyBot).toBeDefined()
-    expect(emptyBot!.name).toBe('EmptyBot')
-    expect(emptyBot!.emoji).toBe('🤷')
-    expect(emptyBot!.reportsTo).toBeNull()
-    expect(emptyBot!.tools).toEqual(['read', 'write'])
+    expect(emptyBot).toBeUndefined()
   })
 
-  it('flows CLI model through to minimal entry', async () => {
+  it('does not include extra workspace agents even when model is present', async () => {
     setupPrimaryWorkspace()
 
     const origExists = mockExistsSync.getMockImplementation()!
@@ -1276,8 +1268,7 @@ describe('CLI agent discovery (multi-workspace)', () => {
 
     const agents = await getAgents()
     const opusBot = agents.find(a => a.id === 'opus-bot')
-    expect(opusBot).toBeDefined()
-    expect(opusBot!.model).toBe('anthropic/claude-opus-4-6')
+    expect(opusBot).toBeUndefined()
   })
 
   it('enriches primary workspace agents with CLI model', async () => {
@@ -1392,7 +1383,7 @@ describe('CLI agent discovery (multi-workspace)', () => {
     expect(agents.length).toBe(bundledAgents.length)
   })
 
-  it('CLI-only: scans each workspace when primary has no agents', async () => {
+  it('CLI-only: does not scan remote workspaces when primary has no agents', async () => {
     vi.stubEnv('WORKSPACE_PATH', '/tmp/ws')
     vi.stubEnv('OPENCLAW_BIN', '/usr/local/bin/openclaw')
 
@@ -1419,10 +1410,10 @@ describe('CLI agent discovery (multi-workspace)', () => {
     ]))
 
     const agents = await getAgents()
-    expect(agents.map(a => a.id)).toContain('remotebot')
+    expect(agents.length).toBe(bundledAgents.length)
   })
 
-  it('handles three workspaces with independent hierarchies', async () => {
+  it('ignores extra workspaces when multiple are reported by CLI', async () => {
     setupPrimaryWorkspace()
 
     // Extend filesystem mocks for two extra workspaces
@@ -1454,11 +1445,7 @@ describe('CLI agent discovery (multi-workspace)', () => {
     const ids = agents.map(a => a.id)
     expect(ids).toContain('jarvis')  // primary root
     expect(ids).toContain('echo')    // primary sub-agent
-    expect(ids).toContain('botb')    // workspace B root (from SOUL.md heading)
-    expect(ids).toContain('c')       // workspace C (minimal entry, no SOUL.md)
-
-    const botC = agents.find(a => a.id === 'c')!
-    expect(botC.name).toBe('BotC')
-    expect(botC.emoji).toBe('🎯')
+    expect(ids).not.toContain('botb')
+    expect(ids).not.toContain('c')
   })
 })

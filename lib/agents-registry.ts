@@ -404,7 +404,7 @@ function discoverAgents(workspacePath: string): AgentEntry[] | null {
 // TTL cache for loadRegistry()
 // ---------------------------------------------------------------------------
 
-let _registryCache: { result: AgentEntry[]; ts: number } | null = null
+let _registryCache: { result: AgentEntry[]; ts: number; includeExtraWorkspaces: boolean } | null = null
 const REGISTRY_TTL = 5000 // 5 seconds
 
 /** Clear the registry cache (exported for testing). */
@@ -587,8 +587,13 @@ function enrichModelsFromCli(
  *   3. CLI-only discovery (scans each agent's workspace)
  *   4. Bundled lib/agents.json               (default example registry)
  */
-export function loadRegistry(): AgentEntry[] {
-  if (_registryCache && Date.now() - _registryCache.ts < REGISTRY_TTL) {
+export function loadRegistry(options?: { includeExtraWorkspaces?: boolean }): AgentEntry[] {
+  const includeExtraWorkspaces = options?.includeExtraWorkspaces !== false
+  if (
+    _registryCache &&
+    _registryCache.includeExtraWorkspaces === includeExtraWorkspaces &&
+    Date.now() - _registryCache.ts < REGISTRY_TTL
+  ) {
     return _registryCache.result
   }
 
@@ -596,7 +601,7 @@ export function loadRegistry(): AgentEntry[] {
   const openclawBin = process.env.OPENCLAW_BIN
 
   const cacheAndReturn = (result: AgentEntry[]): AgentEntry[] => {
-    _registryCache = { result, ts: Date.now() }
+    _registryCache = { result, ts: Date.now(), includeExtraWorkspaces }
     return result
   }
 
@@ -615,12 +620,12 @@ export function loadRegistry(): AgentEntry[] {
     // 2. Auto-discover from primary workspace filesystem
     const discovered = discoverAgents(workspacePath)
 
-    // 2b. Enrich with CLI model data + merge other workspaces
+    // 2b. Enrich with CLI model data and optionally merge other workspaces
     if (discovered && openclawBin) {
       const cliAgents = listCliAgents(openclawBin)
       if (cliAgents) {
         enrichModelsFromCli(discovered, cliAgents, workspacePath)
-        if (cliAgents.length > 1) {
+        if (includeExtraWorkspaces && cliAgents.length > 1) {
           return cacheAndReturn(mergeExtraWorkspaces(discovered, cliAgents, workspacePath))
         }
       }
@@ -629,7 +634,7 @@ export function loadRegistry(): AgentEntry[] {
     if (discovered) return cacheAndReturn(discovered)
 
     // 3. CLI-only: no primary workspace agents, scan each CLI agent's workspace
-    if (openclawBin) {
+    if (includeExtraWorkspaces && openclawBin) {
       const cliAgents = listCliAgents(openclawBin)
       if (cliAgents) {
         return cacheAndReturn(mergeExtraWorkspaces([], cliAgents, ''))
