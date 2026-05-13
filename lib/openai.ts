@@ -1,10 +1,18 @@
 import OpenAI from 'openai'
-import { getActiveGatewayConnection } from './openclaw-connection-server'
+import { getConnectionById, getLocalConnection } from './connections'
 
 export function getOpenAIClient(): OpenAI {
-  const gateway = getActiveGatewayConnection()
+  const gateway = getLocalConnection()
   return new OpenAI({
-    baseURL: gateway.baseUrl,
-    apiKey: gateway.token,
+    baseURL: `${gateway.gatewayUrl}/v1`,
+    apiKey: gateway.gatewayToken,
+  })
+}
+
+export function getOpenAIClientForConnection(connectionId?: string): OpenAI {
+  const connection = (connectionId && getConnectionById(connectionId)) || getLocalConnection()
+  return new OpenAI({
+    baseURL: `${connection.gatewayUrl}/v1`,
+    apiKey: connection.gatewayToken,
   })
 }

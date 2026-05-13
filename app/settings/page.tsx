@@ -7,9 +7,16 @@ import { useSettings } from '@/app/settings-provider'
 import { useAgentsContext } from '@/app/agents-provider'
 import { AgentAvatar } from '@/components/AgentAvatar'
 import { OnboardingWizard } from '@/components/OnboardingWizard'
-import { OpenClawConnectionModal } from '@/components/OpenClawConnectionModal'
 import { deleteOnServer } from '@/lib/conversations'
-import { useOpenClawConnection } from '@/lib/useOpenClawConnection'
+
+interface OpenClawConnection {
+  id: string
+  label: string
+  gatewayUrl: string
+  gatewayToken: string
+  workspacePath?: string
+  isLocal: boolean
+}
 
 // ---------------------------------------------------------------------------
 // Accent color presets
@@ -79,11 +86,20 @@ export default function SettingsPage() {
   } = useSettings()
 
   const { agents, refresh: refreshAgents, loading: agentsLoading } = useAgentsContext()
-  const { status: connectionStatus, reconnect } = useOpenClawConnection()
   const [wizardOpen, setWizardOpen] = useState(false)
-  const [connectionModalOpen, setConnectionModalOpen] = useState(false)
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null)
   const [rescanResult, setRescanResult] = useState<string | null>(null)
+  const [connections, setConnections] = useState<OpenClawConnection[]>([])
+  const [connectionsLoading, setConnectionsLoading] = useState(true)
+  const [connectionsError, setConnectionsError] = useState<string | null>(null)
+  const [testingConnectionId, setTestingConnectionId] = useState<string | null>(null)
+  const [healthMessages, setHealthMessages] = useState<Record<string, string>>({})
+  const [newConnection, setNewConnection] = useState({
+    label: '',
+    gatewayUrl: 'http://localhost:18790',
+    gatewayToken: '',
+    workspacePath: '',
+  })
   const [nameValue, setNameValue] = useState(settings.portalName ?? '')
   const [subtitleValue, setSubtitleValue] = useState(settings.portalSubtitle ?? '')
   const [operatorNameValue, setOperatorNameValue] = useState(settings.operatorName ?? '')
@@ -98,6 +114,81 @@ export default function SettingsPage() {
     setOperatorNameValue(settings.operatorName ?? '')
     setEmojiValue(settings.portalEmoji ?? '')
   }, [settings.portalName, settings.portalSubtitle, settings.operatorName, settings.portalEmoji])
+
+  async function loadConnections() {
+    setConnectionsLoading(true)
+    setConnectionsError(null)
+    try {
+      const res = await fetch('/api/connections', { cache: 'no-store' })
+      if (!res.ok) throw new Error('Failed to load connections')
+      const data = await res.json() as OpenClawConnection[]
+      setConnections(data)
+    } catch (err) {
+      setConnectionsError(err instanceof Error ? err.message : 'Failed to load connections')
+    } finally {
+      setConnectionsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadConnections()
+  }, [])
+
+  async function handleAddConnection() {
+    setConnectionsError(null)
+    setHealthMessages({})
+    try {
+      const res = await fetch('/api/connections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newConnection),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to add connection')
+      setNewConnection({
+        label: '',
+        gatewayUrl: 'http://localhost:18790',
+        gatewayToken: '',
+        workspacePath: '',
+      })
+      await loadConnections()
+      refreshAgents()
+      window.dispatchEvent(new CustomEvent('clawport:openclaw-connection-changed'))
+    } catch (err) {
+      setConnectionsError(err instanceof Error ? err.message : 'Failed to add connection')
+    }
+  }
+
+  async function handleDeleteConnection(id: string) {
+    setConnectionsError(null)
+    try {
+      const res = await fetch(`/api/connections/${id}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(typeof data?.error === 'string' ? data.error : 'Failed to delete connection')
+      await loadConnections()
+      refreshAgents()
+      window.dispatchEvent(new CustomEvent('clawport:openclaw-connection-changed'))
+    } catch (err) {
+      setConnectionsError(err instanceof Error ? err.message : 'Failed to delete connection')
+    }
+  }
+
+  async function handleTestConnection(id: string) {
+    setTestingConnectionId(id)
+    setHealthMessages((prev) => ({ ...prev, [id]: 'Testing...' }))
+    try {
+      const res = await fetch(`/api/connections/${id}/health`, { cache: 'no-store' })
+      const data = await res.json() as { ok: boolean; message: string; status: number | null }
+      const message = data.ok
+        ? `Healthy${typeof data.status === 'number' ? ` (${data.status})` : ''}`
+        : data.message || 'Unreachable'
+      setHealthMessages((prev) => ({ ...prev, [id]: message }))
+    } catch {
+      setHealthMessages((prev) => ({ ...prev, [id]: 'Connection test failed' }))
+    } finally {
+      setTestingConnectionId(null)
+    }
+  }
 
   async function handleIconUpload(file: File) {
     try {
@@ -855,7 +946,7 @@ export default function SettingsPage() {
           </div>
         </section>
 
-        {/* ── Section 4: OpenClaw Remote Connection ── */}
+        {/* ── Section 4: OpenClaw Connections ── */}
         <section style={{ marginBottom: 'var(--space-8)' }}>
           <div
             style={{
@@ -867,7 +958,7 @@ export default function SettingsPage() {
               padding: '0 var(--space-4) var(--space-2)',
             }}
           >
-            OpenClaw Remote Connection
+            OpenClaw Connections
           </div>
           <div
             style={{
@@ -880,65 +971,134 @@ export default function SettingsPage() {
               gap: 'var(--space-3)',
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-              <span
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: '50%',
-                  background:
-                    connectionStatus.status === 'connected'
-                      ? 'var(--system-green)'
-                      : connectionStatus.status === 'error'
-                        ? 'var(--system-red)'
-                        : 'var(--text-quaternary)',
-                }}
+            {connectionsLoading ? (
+              <div style={{ fontSize: 'var(--text-footnote)', color: 'var(--text-secondary)' }}>
+                Loading connections...
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gap: 'var(--space-2)' }}>
+                {connections.map((connection) => (
+                  <div
+                    key={connection.id}
+                    style={{
+                      border: '1px solid var(--separator)',
+                      borderRadius: 'var(--radius-sm)',
+                      padding: 'var(--space-3)',
+                      background: 'var(--fill-quaternary)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 'var(--space-2)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                        <strong style={{ color: 'var(--text-primary)', fontSize: 'var(--text-footnote)' }}>{connection.label}</strong>
+                        {connection.isLocal && (
+                          <span style={{ fontSize: 'var(--text-caption2)', color: 'var(--text-tertiary)' }}>(Local)</span>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+                        <button
+                          onClick={() => handleTestConnection(connection.id)}
+                          disabled={testingConnectionId === connection.id}
+                          className="btn-scale"
+                          style={{
+                            padding: 'var(--space-1) var(--space-2)',
+                            borderRadius: 'var(--radius-sm)',
+                            border: '1px solid var(--separator)',
+                            background: 'var(--fill-tertiary)',
+                            color: 'var(--text-primary)',
+                            fontSize: 'var(--text-caption2)',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {testingConnectionId === connection.id ? 'Testing...' : 'Test'}
+                        </button>
+                        {!connection.isLocal && (
+                          <button
+                            onClick={() => handleDeleteConnection(connection.id)}
+                            className="btn-scale"
+                            style={{
+                              padding: 'var(--space-1) var(--space-2)',
+                              borderRadius: 'var(--radius-sm)',
+                              border: '1px solid color-mix(in srgb, var(--system-red) 40%, var(--separator))',
+                              background: 'transparent',
+                              color: 'var(--system-red)',
+                              fontSize: 'var(--text-caption2)',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Delete
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 'var(--text-caption2)', color: 'var(--text-secondary)' }}>
+                      {connection.gatewayUrl}
+                    </div>
+                    {healthMessages[connection.id] && (
+                      <div style={{ fontSize: 'var(--text-caption2)', color: 'var(--text-tertiary)' }}>
+                        {healthMessages[connection.id]}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ borderTop: '1px solid var(--separator)', paddingTop: 'var(--space-3)', display: 'grid', gap: 'var(--space-2)' }}>
+              <div style={{ fontSize: 'var(--text-footnote)', color: 'var(--text-secondary)', fontWeight: 'var(--weight-medium)' }}>
+                Add remote connection
+              </div>
+              <input
+                className="apple-input"
+                placeholder="Label (e.g. Proxmox-LAN)"
+                value={newConnection.label}
+                onChange={(e) => setNewConnection((prev) => ({ ...prev, label: e.target.value }))}
               />
-              <span style={{ fontSize: 'var(--text-footnote)', color: 'var(--text-secondary)' }}>
-                {connectionStatus.status === 'connected'
-                  ? `Tunnel active${connectionStatus.localPort ? ` (localhost:${connectionStatus.localPort})` : ''}`
-                  : connectionStatus.status === 'connecting'
-                    ? 'Connecting tunnel...'
-                    : connectionStatus.status === 'error'
-                      ? `Tunnel error${connectionStatus.message ? `: ${connectionStatus.message}` : ''}`
-                      : 'No active tunnel'}
-              </span>
+              <input
+                className="apple-input"
+                placeholder="Gateway URL (e.g. http://localhost:18790)"
+                value={newConnection.gatewayUrl}
+                onChange={(e) => setNewConnection((prev) => ({ ...prev, gatewayUrl: e.target.value }))}
+              />
+              <input
+                className="apple-input"
+                placeholder="Gateway token"
+                value={newConnection.gatewayToken}
+                onChange={(e) => setNewConnection((prev) => ({ ...prev, gatewayToken: e.target.value }))}
+              />
+              <input
+                className="apple-input"
+                placeholder="Workspace path (optional)"
+                value={newConnection.workspacePath}
+                onChange={(e) => setNewConnection((prev) => ({ ...prev, workspacePath: e.target.value }))}
+              />
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  onClick={handleAddConnection}
+                  className="btn-scale"
+                  style={{
+                    padding: 'var(--space-2) var(--space-3)',
+                    borderRadius: 'var(--radius-sm)',
+                    background: 'var(--accent)',
+                    color: 'var(--accent-contrast)',
+                    border: 'none',
+                    cursor: 'pointer',
+                    fontSize: 'var(--text-footnote)',
+                    fontWeight: 'var(--weight-medium)',
+                  }}
+                >
+                  Add Connection
+                </button>
+              </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-              <button
-                onClick={() => setConnectionModalOpen(true)}
-                className="btn-scale"
-                style={{
-                  padding: 'var(--space-2) var(--space-3)',
-                  borderRadius: 'var(--radius-sm)',
-                  background: 'var(--accent)',
-                  color: 'var(--accent-contrast)',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontSize: 'var(--text-footnote)',
-                  fontWeight: 'var(--weight-medium)',
-                }}
-              >
-                Open SSH Connection
-              </button>
-              <button
-                onClick={() => reconnect().catch(() => {})}
-                disabled={!connectionStatus.hasReconnectCredentials}
-                className="btn-scale"
-                style={{
-                  padding: 'var(--space-2) var(--space-3)',
-                  borderRadius: 'var(--radius-sm)',
-                  background: 'var(--fill-tertiary)',
-                  color: 'var(--text-primary)',
-                  border: '1px solid var(--separator)',
-                  cursor: connectionStatus.hasReconnectCredentials ? 'pointer' : 'not-allowed',
-                  fontSize: 'var(--text-footnote)',
-                  opacity: connectionStatus.hasReconnectCredentials ? 1 : 0.6,
-                }}
-              >
-                Reconnect
-              </button>
-            </div>
+
+            {connectionsError && (
+              <div style={{ fontSize: 'var(--text-caption2)', color: 'var(--system-red)' }}>
+                {connectionsError}
+              </div>
+            )}
           </div>
         </section>
 
@@ -1069,10 +1229,6 @@ export default function SettingsPage() {
         {wizardOpen && (
           <OnboardingWizard forceOpen onClose={() => setWizardOpen(false)} />
         )}
-        <OpenClawConnectionModal
-          open={connectionModalOpen}
-          onOpenChange={setConnectionModalOpen}
-        />
       </div>
     </div>
   )

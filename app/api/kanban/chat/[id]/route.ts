@@ -1,7 +1,7 @@
 export const runtime = 'nodejs'
 
 import { getAgent } from '@/lib/agents'
-import { getOpenAIClient } from '@/lib/openai'
+import { getOpenAIClientForConnection } from '@/lib/openai'
 import type OpenAI from 'openai'
 
 const MAX_TITLE = 500
@@ -22,7 +22,6 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const openai = getOpenAIClient()
   const { id } = await params
   const agent = await getAgent(id)
 
@@ -32,6 +31,7 @@ export async function POST(
       headers: { 'Content-Type': 'application/json' },
     })
   }
+  const openai = getOpenAIClientForConnection(agent.connectionId)
 
   let body: { messages?: unknown; ticket?: unknown }
   try {

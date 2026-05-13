@@ -3,16 +3,14 @@ export const runtime = 'nodejs'
 import { getAgent } from '@/lib/agents'
 import { validateChatMessages } from '@/lib/validation'
 import { hasImageContent, extractImageAttachments, buildTextPrompt, sendViaOpenClaw } from '@/lib/anthropic'
-import { getOpenAIClient } from '@/lib/openai'
-import { getActiveGatewayConnection } from '@/lib/openclaw-connection-server'
+import { getOpenAIClientForConnection } from '@/lib/openai'
+import { getConnectionById, getLocalConnection, gatewayWsUrl } from '@/lib/connections'
 import type OpenAI from 'openai'
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const openai = getOpenAIClient()
-  const gateway = getActiveGatewayConnection()
   const { id } = await params
   const agent = await getAgent(id)
 
@@ -22,6 +20,9 @@ export async function POST(
       headers: { 'Content-Type': 'application/json' },
     })
   }
+
+  const connection = getConnectionById(agent.connectionId || 'local') || getLocalConnection()
+  const openai = getOpenAIClientForConnection(connection.id)
 
   let body: unknown
   try {
@@ -56,13 +57,13 @@ export async function POST(
   const lastUserMsg = [...messages].reverse().find(m => m.role === 'user')
   const latestHasImages = lastUserMsg ? hasImageContent([lastUserMsg]) : false
 
-  if (latestHasImages && gateway.token) {
+  if (latestHasImages && connection.gatewayToken) {
     const attachments = extractImageAttachments([lastUserMsg!])
     const textPrompt = buildTextPrompt(systemPrompt, messages)
 
     const response = await sendViaOpenClaw({
-      gatewayToken: gateway.token,
-      gatewayWsUrl: gateway.wsUrl,
+      gatewayToken: connection.gatewayToken,
+      gatewayWsUrl: gatewayWsUrl(connection.gatewayUrl),
       message: textPrompt,
       attachments,
     })

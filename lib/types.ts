@@ -2,6 +2,9 @@
 
 export interface Agent {
   id: string               // slug, e.g. "vera"
+  sourceAgentId?: string   // original id inside connection
+  connectionId?: string    // connection profile id ("local", ...)
+  connectionLabel?: string // display label for connection
   name: string             // display name, e.g. "VERA"
   title: string            // role title, e.g. "Chief Strategy Officer"
   reportsTo: string | null // parent agent id (null for root orchestrator)

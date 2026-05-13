@@ -101,6 +101,20 @@ export function AgentNode({ data, selected }: NodeProps) {
           flexWrap: "wrap",
         }}
       >
+        {agent.connectionLabel && (
+          <span
+            style={{
+              fontSize: "var(--text-caption2)",
+              fontWeight: "var(--weight-medium)",
+              color: "var(--text-secondary)",
+              background: "var(--fill-secondary)",
+              padding: "1px 7px",
+              borderRadius: 10,
+            }}
+          >
+            {agent.connectionLabel}
+          </span>
+        )}
         {toolCount > 0 && (
           <span
             style={{

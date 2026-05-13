@@ -116,6 +116,8 @@ const COL_GAP = 80
 const GROUP_PAD_X = 30
 const GROUP_PAD_TOP = 36
 const GROUP_PAD_BOTTOM = 24
+const CONNECTION_GROUP_GAP = 100
+const CONNECTION_GROUP_TOP = 40
 
 /** Compute dagre positions for team layout (expensive, depends only on agents/crons structure). */
 function computeTeamPositions(
@@ -281,6 +283,86 @@ function computeHierarchyPositions(
   return { nodes, agentMap: agentMapWithCrons }
 }
 
+function computeConnectionGroupedPositions(
+  agents: Agent[],
+  crons: CronJob[],
+): { nodes: Node[]; agentMap: Map<string, Agent> } {
+  const byConnection = new Map<string, { label: string; agents: Agent[] }>()
+  for (const agent of agents) {
+    const key = agent.connectionId || 'local'
+    const current = byConnection.get(key)
+    if (current) {
+      current.agents.push(agent)
+      continue
+    }
+    byConnection.set(key, {
+      label: agent.connectionLabel || 'Local',
+      agents: [agent],
+    })
+  }
+
+  const nodes: Node[] = []
+  const agentMapWithCrons = mergeAgentsWithCrons(agents, crons)
+  let cursorX = 0
+  let index = 0
+
+  for (const [, group] of byConnection) {
+    const subset = group.agents
+    const computed = computeHierarchyPositions(subset, crons).nodes
+    if (computed.length === 0) continue
+
+    let minX = Infinity
+    let minY = Infinity
+    let maxX = -Infinity
+    let maxY = -Infinity
+    for (const node of computed) {
+      minX = Math.min(minX, node.position.x)
+      minY = Math.min(minY, node.position.y)
+      maxX = Math.max(maxX, node.position.x + NODE_W)
+      maxY = Math.max(maxY, node.position.y + NODE_H)
+    }
+
+    const width = maxX - minX + GROUP_PAD_X * 2
+    const height = maxY - minY + GROUP_PAD_TOP + GROUP_PAD_BOTTOM
+    const groupId = `connection-group-${index++}`
+
+    nodes.push({
+      id: groupId,
+      type: "teamGroup",
+      data: { label: group.label },
+      position: { x: cursorX, y: CONNECTION_GROUP_TOP },
+      style: {
+        width,
+        height,
+        background: "var(--fill-quaternary)",
+        borderRadius: 12,
+        border: "1px solid var(--separator)",
+      },
+      selectable: false,
+      draggable: false,
+    })
+
+    for (const node of computed) {
+      const sourceAgent = agentMapWithCrons.get(node.id)
+      if (!sourceAgent) continue
+      nodes.push({
+        ...node,
+        data: sourceAgent as unknown as Record<string, unknown>,
+        position: {
+          x: node.position.x - minX + GROUP_PAD_X,
+          y: node.position.y - minY + GROUP_PAD_TOP,
+        },
+        parentId: groupId,
+        extent: "parent",
+      })
+    }
+
+    cursorX += width + CONNECTION_GROUP_GAP
+  }
+
+  return { nodes, agentMap: agentMapWithCrons }
+}
+
 /** Apply selection styling to pre-computed nodes/edges (cheap). */
 function applySelection(
   positionedNodes: Node[],
@@ -298,12 +380,18 @@ function applySelection(
 
 export function OrgMap({ agents, crons, selectedId, onNodeClick }: OrgMapProps) {
   const [layout, setLayout] = useState<MapLayout>("hierarchy")
+  const hasMultipleConnections = useMemo(
+    () => new Set(agents.map((agent) => agent.connectionId || 'local')).size > 1,
+    [agents]
+  )
 
   // Expensive dagre computation -- only recomputes when agents/crons/layout change
   const positionedNodes = useMemo(() => {
-    const compute = layout === "teams" ? computeTeamPositions : computeHierarchyPositions
+    const compute = hasMultipleConnections
+      ? computeConnectionGroupedPositions
+      : (layout === "teams" ? computeTeamPositions : computeHierarchyPositions)
     return compute(agents, crons).nodes
-  }, [agents, crons, layout])
+  }, [agents, crons, layout, hasMultipleConnections])
 
   // Cheap selection styling -- runs on every selectedId change without dagre
   const { nodes: initialNodes, edges: initialEdges } = useMemo(
