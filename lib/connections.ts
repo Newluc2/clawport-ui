@@ -130,12 +130,14 @@ export function listConnections(): OpenClawConnection[] {
       isLocal: false as const,
     }))
 
-  // Add the active SSH tunnel as a temporary connection if available
+  // Add the active SSH tunnel as a temporary connection if available and healthy
   const tunnelConnection: OpenClawConnection | null = (() => {
     try {
       const status = getOpenClawConnectionStatus()
       if (status.status === 'connected' && status.usesTunnel && status.localPort) {
         const gw = getActiveGatewayConnection()
+        // Only include tunnel if it has a valid token and gateway URL
+        if (!gw.token || !gw.baseUrl) return null
         return {
           id: 'tunnel',
           label: `Tunnel (port ${status.localPort})`,
