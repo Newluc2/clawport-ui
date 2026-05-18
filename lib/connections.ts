@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import { homedir } from 'os'
 import { join } from 'path'
 import type { AgentEntry } from '@/lib/agents-registry'
+import { getOpenClawConnectionStatus, getActiveGatewayConnection } from '@/lib/openclaw-connection-server'
 
 export interface OpenClawConnection {
   id: string
@@ -128,7 +129,32 @@ export function listConnections(): OpenClawConnection[] {
       ...connection,
       isLocal: false as const,
     }))
-  return [local, ...remotes]
+
+  // Add the active SSH tunnel as a temporary connection if available
+  const tunnelConnection: OpenClawConnection | null = (() => {
+    try {
+      const status = getOpenClawConnectionStatus()
+      if (status.status === 'connected' && status.usesTunnel && status.localPort) {
+        const gw = getActiveGatewayConnection()
+        return {
+          id: 'tunnel',
+          label: `Tunnel (port ${status.localPort})`,
+          gatewayUrl: gw.baseUrl.replace(/\/v1$/, ''),
+          gatewayToken: gw.token,
+          isLocal: false,
+        }
+      }
+    } catch {
+      // Silently ignore errors — tunnel not available
+    }
+    return null
+  })()
+
+  const connections = [local, ...remotes]
+  if (tunnelConnection) {
+    connections.push(tunnelConnection)
+  }
+  return connections
 }
 
 export function getConnectionById(id: string): OpenClawConnection | null {
